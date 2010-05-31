@@ -62,7 +62,7 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 
 	buf[0] = BT_TRANS_SET_REPORT | BT_PARAM_OUTPUT;
 	buf[1] = report;
-	memcpy(buf+2, data, len);
+	memcpy( &buf[2], data, len );
 	if (!(flags & CWIID_SEND_RPT_NO_RUMBLE)) {
 		buf[2] |= wiimote->state.rumble;
 	}

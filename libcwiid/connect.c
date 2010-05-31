@@ -214,6 +214,9 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 		goto ERR_HND;
 	}
 
+	/* Clear memory. */
+	memset( wiimote, 0, sizeof(*wiimote) );
+
 	/* set sockets and flags */
 	wiimote->ctl_socket = ctl_socket;
 	wiimote->int_socket = int_socket;
