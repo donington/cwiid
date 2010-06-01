@@ -159,11 +159,19 @@ struct wiimote {
 	int flags;
 	int ctl_socket;
 	int int_socket;
+
+   /* Router thread. */
 	pthread_t router_thread;
+
+   /* Status thread. */
 	pthread_t status_thread;
+	int status_pipe[2];
+
+   /* Message thread. */
 	pthread_t mesg_callback_thread;
 	int mesg_pipe[2];
-	int status_pipe[2];
+   pthread_mutex_t mesg_mutex;
+
 	int rw_pipe[2];
 	struct cwiid_state state;
 	enum rw_status rw_status;

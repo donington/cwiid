@@ -122,8 +122,8 @@ int write_mesg_array(struct wiimote *wiimote, struct mesg_array *ma)
 	ssize_t len = (void *)&ma->array[ma->count] - (void *)ma;
 	int ret = 0;
 
-	/* This must remain a single write operation to ensure atomicity,
-	 * which is required to avoid mutexes and cancellation issues */
+   pthread_mutex_lock( &wiimote->mesg_mutex );
+
 	if (write(wiimote->mesg_pipe[1], ma, len) != len) {
 		if (errno == EAGAIN) {
 			cwiid_err(wiimote, "Mesg pipe overflow");
@@ -146,6 +146,8 @@ int write_mesg_array(struct wiimote *wiimote, struct mesg_array *ma)
 			ret = -1;
 		}
 	}
+
+   pthread_mutex_unlock( &wiimote->mesg_mutex );
 
 	return ret;
 }
