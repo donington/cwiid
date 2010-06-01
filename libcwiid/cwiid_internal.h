@@ -166,6 +166,8 @@ struct wiimote {
    /* Status thread. */
 	pthread_t status_thread;
 	int status_pipe[2];
+   pthread_cond_t status_cond;
+   pthread_mutex_t status_mutex;
 
    /* Message thread. */
 	pthread_t mesg_callback_thread;

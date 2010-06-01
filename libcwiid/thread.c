@@ -147,15 +147,22 @@ void *status_thread(struct wiimote *wiimote)
 	status_mesg = &ma.array[0].status_mesg;
 
 	while (1) {
+      if (pthread_mutex_lock( &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+         break;
+      }
+
 		if (full_read(wiimote->status_pipe[0], status_mesg,
 		              sizeof *status_mesg)) {
 			cwiid_err(wiimote, "Pipe read error (status)");
 			/* Quit! */
+         pthread_mutex_unlock( &wiimote->status_mutex );
 			break;
 		}
 
 		if (status_mesg->type != CWIID_MESG_STATUS) {
 			cwiid_err(wiimote, "Bad message on status pipe");
+         pthread_mutex_unlock( &wiimote->status_mutex );
 			continue;
 		}
 
@@ -237,6 +244,16 @@ void *status_thread(struct wiimote *wiimote)
 				/* prints its own errors */
 			}
 		}
+
+      if (pthread_cond_broadcast( &wiimote->status_cond )) {
+         cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
+         pthread_mutex_unlock( &wiimote->status_mutex );
+         break;
+      }
+      if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+         break;
+      }
 	}
 
 	return NULL;
