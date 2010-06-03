@@ -124,9 +124,12 @@ int process_status(struct wiimote *wiimote, const unsigned char *data,
       process_statusUnknown( wiimote, status_mesg );
 	}
 
+   /* update the state. */
    if (update_state(wiimote, ma)) {
       cwiid_err(wiimote, "State update error");
    }
+
+   /* Set previous rpt mode again. */
    if (update_rpt_mode(wiimote, -1)) {
       cwiid_err(wiimote, "Error reseting report mode");
    }

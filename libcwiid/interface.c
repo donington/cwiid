@@ -52,9 +52,31 @@ int cwiid_enable(cwiid_wiimote_t *wiimote, int flags)
 		}
 	}
 	if (flags & CWIID_FLAG_MOTIONPLUS) {
+#if 0
+      if (pthread_mutex_lock( &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+         return -1;
+      }
+#endif
+
+      /* Must write 0x04 to 0xA600FE which will generate a status report indicating it's been plugged in. */
 		data = 0x04;
 		cwiid_write(wiimote, CWIID_RW_REG, 0xA600FE, 1, &data);
-		cwiid_request_status(wiimote);
+
+#if 0
+      /* Wait for conditional to indicate a status reading. */
+      if (pthread_cond_wait( &wiimote->status_cond, &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Conditional wait error (status cond)" );
+         pthread_mutex_unlock( &wiimote->status_mutex );
+         return -1;
+      }
+
+      /* Free status lock. */
+      if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+         return -1;
+      }
+#endif
 	}
 	wiimote->flags |= flags;
 	return 0;

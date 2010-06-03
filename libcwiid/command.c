@@ -245,9 +245,9 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 	wiimote->rw_status = RW_WRITE;
 	while (sent<len) {
 		/* Compose write packet */
-		buf[1]=(unsigned char)(((offset+sent)>>16) & 0xFF);
-		buf[2]=(unsigned char)(((offset+sent)>>8) & 0xFF);
-		buf[3]=(unsigned char)((offset+sent) & 0xFF);
+		buf[1] = (unsigned char)(((offset+sent)>>16) & 0xFF);
+		buf[2] = (unsigned char)(((offset+sent)>>8) & 0xFF);
+		buf[3] = (unsigned char)((offset+sent) & 0xFF);
 		if (len-sent >= 0x10) {
 			buf[4]=(unsigned char)0x10;
 		}
@@ -263,7 +263,7 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 		}
 
 		/* Read packets from pipe */
-		if (read(wiimote->rw_pipe[0], &mesg, sizeof mesg) != sizeof mesg) {
+		if (read( wiimote->rw_pipe[0], &mesg, sizeof(mesg)) != sizeof(mesg) ) {
 			cwiid_err(wiimote, "Pipe read error (rw pipe)");
 			ret = -1;
 			goto CODA;
@@ -285,7 +285,7 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 			goto CODA;
 		};
 
-		sent+=buf[4];
+		sent += buf[4];
 	}
 
 CODA:
