@@ -56,7 +56,7 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 
    if (len+2 > sizeof(buf)) {
 		cwiid_err( wiimote, "cwiid_send_prt: %d bytes over maximum", len+2-sizeof(buf) );
-      return -1;
+		return -1;
 	}
 
 	buf[0] = BT_TRANS_SET_REPORT | BT_PARAM_OUTPUT;
@@ -76,7 +76,7 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
       return -1;
 	}
 
-   return 0;
+	return 0;
 }
 
 int cwiid_request_status(cwiid_wiimote_t *wiimote)
