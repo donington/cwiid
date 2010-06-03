@@ -39,28 +39,98 @@ int process_error(struct wiimote *wiimote, ssize_t len, struct mesg_array *ma)
 	return 0;
 }
 
+
+static void process_statusUnknown( struct wiimote *wiimote, struct mesg_array *ma )
+{
+   struct cwiid_status_mesg *status_mesg;
+   unsigned char buf[2];
+
+   ma->count = 1;
+   status_mesg = &ma->array[0].status_mesg;
+
+   /* Read extension ID */
+   if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
+      cwiid_err(wiimote, "Read error (extension error)");
+      status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+   }
+   /* If the extension didn't change, or if the extension is a
+    *           * MotionPlus, no init necessary */
+   switch ((buf[0] << 8) | buf[1]) {
+      case EXT_NONE:
+         status_mesg->ext_type = CWIID_EXT_NONE;
+         break;
+      case EXT_NUNCHUK:
+         status_mesg->ext_type = CWIID_EXT_NUNCHUK;
+         break;
+      case EXT_CLASSIC:
+         status_mesg->ext_type = CWIID_EXT_CLASSIC;
+         break;
+      case EXT_BALANCE:
+         status_mesg->ext_type = CWIID_EXT_BALANCE;
+         break;
+      case EXT_MOTIONPLUS:
+         status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
+         break;
+      case EXT_PARTIAL:
+         /* Everything (but MotionPlus) shows up as partial until initialized */
+         buf[0] = 0x55;
+         buf[1] = 0x00;
+         /* Initialize extension register space */
+         if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &buf[0])) {
+            cwiid_err(wiimote, "Extension initialization error");
+            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+         }
+         else if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &buf[1])) {
+            cwiid_err(wiimote, "Extension initialization error");
+            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+         }
+         /* Read extension ID */
+         else if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
+            cwiid_err(wiimote, "Read error (extension error)");
+            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+         }
+         else {
+            switch ((buf[0] << 8) | buf[1]) {
+               case EXT_NONE:
+               case EXT_PARTIAL:
+                  status_mesg->ext_type = CWIID_EXT_NONE;
+                  break;
+               case EXT_NUNCHUK:
+                  status_mesg->ext_type = CWIID_EXT_NUNCHUK;
+                  break;
+               case EXT_CLASSIC:
+                  status_mesg->ext_type = CWIID_EXT_CLASSIC;
+                  break;
+               case EXT_BALANCE:
+                  status_mesg->ext_type = CWIID_EXT_BALANCE;
+                  break;
+               default:
+                  status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+                  break;
+            }
+         }
+         break;
+   }
+}
+
 int process_status(struct wiimote *wiimote, const unsigned char *data,
                    struct mesg_array *ma)
 {
 	struct cwiid_status_mesg status_mesg;
 
-	(void)ma;
-
 	status_mesg.type = CWIID_MESG_STATUS;
 	status_mesg.battery = data[5];
 	if (data[2] & 0x02) {
 		/* status_thread will figure out what it is */
-		status_mesg.ext_type = CWIID_EXT_UNKNOWN;
-	}
-	else {
-		status_mesg.ext_type = CWIID_EXT_NONE;
+      process_statusUnknown( wiimote, ma );
 	}
 
-	if (write(wiimote->status_pipe[1], &status_mesg, sizeof status_mesg)
-	  != sizeof status_mesg) {
-		cwiid_err(wiimote, "Status pipe write error");
-		return -1;
-	}
+   if (update_state(wiimote, ma)) {
+      cwiid_err(wiimote, "State update error");
+   }
+   if (update_rpt_mode(wiimote, -1)) {
+      cwiid_err(wiimote, "Error reseting report mode");
+   }
 
 	return 0;
 }

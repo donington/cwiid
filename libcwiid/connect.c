@@ -33,54 +33,60 @@ static int wiimote_id = 0;
 /* TODO: Turn this onto a macro on next major so version */
 cwiid_wiimote_t *cwiid_open(bdaddr_t *bdaddr, int flags)
 {
-	return cwiid_open_timeout(bdaddr, flags, DEFAULT_TIMEOUT);
+	return cwiid_open_timeout( bdaddr, flags, DEFAULT_TIMEOUT );
 }
 
-cwiid_wiimote_t *cwiid_open_timeout(bdaddr_t *bdaddr, int flags, int timeout)
+cwiid_wiimote_t *cwiid_open_timeout(bdaddr_t *pbdaddr, int flags, int timeout)
 {
 	struct sockaddr_l2 remote_addr;
 	int ctl_socket = -1, int_socket = -1;
 	struct wiimote *wiimote = NULL;
+   int ret;
+   bdaddr_t bdaddr;
 
 	/* If BDADDR_ANY is given, find available wiimote */
-	if (bacmp(bdaddr, BDADDR_ANY) == 0) {
-		if (cwiid_find_wiimote(bdaddr, timeout)) {
+	if ((pbdaddr == NULL) || bacmp( pbdaddr, BDADDR_ANY) == 0) {
+		if (cwiid_find_wiimote( &bdaddr, timeout)) {
 			goto ERR_HND;
 		}
 		sleep(1);
 	}
+   else {
+      bacpy( &bdaddr, pbdaddr );
+   }
 
 	/* Connect to Wiimote */
 	/* Control Channel */
-	memset(&remote_addr, 0, sizeof remote_addr);
+	memset( &remote_addr, 0, sizeof(remote_addr) );
 	remote_addr.l2_family = AF_BLUETOOTH;
-	remote_addr.l2_bdaddr = *bdaddr;
-	remote_addr.l2_psm = htobs(CTL_PSM);
-	if ((ctl_socket =
-	  socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) == -1) {
+   bacpy( &remote_addr.l2_bdaddr, &bdaddr );
+	remote_addr.l2_psm    = htobs(CTL_PSM);
+   ctl_socket = socket( AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP );
+   if (ctl_socket < 0) {
 		cwiid_err(NULL, "Socket creation error (control socket)");
 		goto ERR_HND;
 	}
-	if (connect(ctl_socket, (struct sockaddr *)&remote_addr,
-		        sizeof remote_addr)) {
+   ret = connect( ctl_socket, (struct sockaddr *) &remote_addr, sizeof(remote_addr) );
+   if (ret < 0) {
 		cwiid_err(NULL, "Socket connect error (control socket)");
 		goto ERR_HND;
 	}
 
 	/* Interrupt Channel */
-	remote_addr.l2_psm = htobs(INT_PSM);
-	if ((int_socket =
-	  socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP)) == -1) {
+	remote_addr.l2_psm    = htobs(INT_PSM);
+   int_socket = socket( AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP );
+   if (int_socket < 0) {
 		cwiid_err(NULL, "Socket creation error (interrupt socket)");
 		goto ERR_HND;
 	}
-	if (connect(int_socket, (struct sockaddr *)&remote_addr,
-		        sizeof remote_addr)) {
+   ret = connect( int_socket, (struct sockaddr *) &remote_addr, sizeof(remote_addr) );
+   if (ret < 0) {
 		cwiid_err(NULL, "Socket connect error (interrupt socket)");
 		goto ERR_HND;
 	}
 
-	if ((wiimote = cwiid_new(ctl_socket, int_socket, flags)) == NULL) {
+   wiimote = cwiid_new( ctl_socket, int_socket, flags );
+   if (wiimote == NULL) {
 		/* Raises its own error */
 		goto ERR_HND;
 	}
@@ -113,7 +119,7 @@ cwiid_wiimote_t *cwiid_listen(int flags)
 
 	/* Connect to Wiimote */
 	/* Control Channel */
-	memset(&local_addr, 0, sizeof local_addr);
+	memset( &local_addr, 0, sizeof(local_addr) );
 	local_addr.l2_family = AF_BLUETOOTH;
 	local_addr.l2_bdaddr = *BDADDR_ANY;
 	local_addr.l2_psm = htobs(CTL_PSM);
@@ -203,14 +209,15 @@ ERR_HND:
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 {
 	struct wiimote *wiimote = NULL;
-	char mesg_pipe_init = 0, status_pipe_init = 0, rw_pipe_init = 0,
+	char mesg_pipe_init = 0, rw_pipe_init = 0,
         mesg_mutex_init = 0, state_mutex_init = 0, rw_mutex_init = 0,
         rpt_mutex_init = 0, status_mutex_init = 0, status_cond_init = 0,
-	     router_thread_init = 0, status_thread_init = 0;
+	     router_thread_init = 0;
 	void *pthread_ret;
 
 	/* Allocate wiimote */
-	if ((wiimote = malloc(sizeof *wiimote)) == NULL) {
+   wiimote = malloc( sizeof(*wiimote) );
+   if (wiimote == NULL) {
 		cwiid_err(NULL, "Memory allocation error (cwiid_wiimote_t)");
 		goto ERR_HND;
 	}
@@ -218,10 +225,10 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	/* Clear memory. */
 	memset( wiimote, 0, sizeof(*wiimote) );
 
-	/* set sockets and flags */
+   /* Set sockets and flags. */
 	wiimote->ctl_socket = ctl_socket;
 	wiimote->int_socket = int_socket;
-	wiimote->flags = flags;
+	wiimote->flags      = flags;
 
 	/* Global Lock, Store and Increment wiimote_id */
 	if (pthread_mutex_lock(&global_mutex)) {
@@ -236,29 +243,24 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	}
 
 	/* Create pipes */
-	if (pipe(wiimote->mesg_pipe)) {
+	if (pipe( wiimote->mesg_pipe )) {
 		cwiid_err(wiimote, "Pipe creation error (mesg pipe)");
 		goto ERR_HND;
 	}
 	mesg_pipe_init = 1;
-	if (pipe(wiimote->status_pipe)) {
-		cwiid_err(wiimote, "Pipe creation error (status pipe)");
-		goto ERR_HND;
-	}
-	status_pipe_init = 1;
-	if (pipe(wiimote->rw_pipe)) {
+	if (pipe( wiimote->rw_pipe )) {
 		cwiid_err(wiimote, "Pipe creation error (rw pipe)");
 		goto ERR_HND;
 	}
 	rw_pipe_init = 1;
 
 	/* Setup blocking */
-	if (fcntl(wiimote->mesg_pipe[1], F_SETFL, O_NONBLOCK)) {
+	if (fcntl( wiimote->mesg_pipe[1], F_SETFL, O_NONBLOCK) ) {
 		cwiid_err(wiimote, "File control error (mesg write pipe)");
 		goto ERR_HND;
 	}
 	if (wiimote->flags & CWIID_FLAG_NONBLOCK) {
-		if (fcntl(wiimote->mesg_pipe[0], F_SETFL, O_NONBLOCK)) {
+		if (fcntl( wiimote->mesg_pipe[0], F_SETFL, O_NONBLOCK) ) {
 			cwiid_err(wiimote, "File control error (mesg read pipe)");
 			goto ERR_HND;
 		}
@@ -293,7 +295,7 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	}
 	mesg_mutex_init = 1;
 	if (pthread_mutex_init(&wiimote->status_mutex, NULL)) {
-		cwiid_err(wiimote, "Mutex initialization error (mesg mutex)");
+		cwiid_err(wiimote, "Mutex initialization error (status mutex)");
 		goto ERR_HND;
 	}
 	status_mutex_init = 1;
@@ -309,39 +311,13 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	}
 	router_thread_init = 1;
 
-   /* Close status lock for status read. */
-   if (pthread_mutex_lock( &wiimote->status_mutex )) {
-		cwiid_err( wiimote, "Mutex lock error (status mutex)");
-      goto ERR_HND;
-   }
-
    /* Clear state before starting status thread. */
 	memset(&wiimote->state, 0, sizeof wiimote->state);
 	wiimote->mesg_callback = NULL;
 
-	if (pthread_create(&wiimote->status_thread, NULL,
-	                   (void *(*)(void *))&status_thread, wiimote)) {
-		cwiid_err(wiimote, "Thread creation error (status thread)");
-		goto ERR_HND;
-	}
-	status_thread_init = 1;
-
-	/* Success!  Update state */
+   /* Update status. */
 	cwiid_set_led( wiimote, 0 );
 	cwiid_request_status( wiimote );
-
-   /* Wait for conditional to indicate a status reading. */
-   if (pthread_cond_wait( &wiimote->status_cond, &wiimote->status_mutex )) {
-      cwiid_err( wiimote, "Conditional wait error (status cond)" );
-      pthread_mutex_unlock( &wiimote->status_mutex );
-      goto ERR_HND;
-   }
-
-   /* Free status lock. */
-   if (pthread_mutex_unlock( &wiimote->status_mutex )) {
-		cwiid_err( wiimote, "Mutex unlock error (status mutex)");
-      goto ERR_HND;
-   }
 
 	return wiimote;
 
@@ -359,26 +335,10 @@ ERR_HND:
 			}
 		}
 
-		if (status_thread_init) {
-			pthread_cancel(wiimote->status_thread);
-			if (pthread_join(wiimote->status_thread, &pthread_ret)) {
-				cwiid_err(wiimote, "Thread join error (status thread)");
-			}
-			else if (!((pthread_ret == PTHREAD_CANCELED) && (pthread_ret == NULL))) {
-				cwiid_err(wiimote, "Bad return value from status thread");
-			}
-		}
-
 		/* Close Pipes */
 		if (mesg_pipe_init) {
 			if (close(wiimote->mesg_pipe[0]) || close(wiimote->mesg_pipe[1])) {
 				cwiid_err(wiimote, "Pipe close error (mesg pipe)");
-			}
-		}
-		if (status_pipe_init) {
-			if (close(wiimote->status_pipe[0]) ||
-			  close(wiimote->status_pipe[1])) {
-				cwiid_err(wiimote, "Pipe close error (status pipe)");
 			}
 		}
 		if (rw_pipe_init) {
@@ -437,7 +397,7 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 		cwiid_set_rumble(wiimote, 0);
 	}
 
-	/* Cancel and join router_thread and status_thread */
+	/* Cancel and join router_thread and router_thread */
 	if (pthread_cancel(wiimote->router_thread)) {
 		/* if thread quit abnormally, would have printed it's own error */
 	}
@@ -446,16 +406,6 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 	}
 	else if (!((pthread_ret == PTHREAD_CANCELED) || (pthread_ret == NULL))) {
 		cwiid_err(wiimote, "Bad return value from router thread");
-	}
-
-	if (pthread_cancel(wiimote->status_thread)) {
-		/* if thread quit abnormally, would have printed it's own error */
-	}
-	if (pthread_join(wiimote->status_thread, &pthread_ret)) {
-		cwiid_err(wiimote, "Thread join error (status thread)");
-	}
-	else if (!((pthread_ret == PTHREAD_CANCELED) || (pthread_ret == NULL))) {
-		cwiid_err(wiimote, "Bad return value from status thread");
 	}
 
 	if (wiimote->mesg_callback) {
@@ -480,9 +430,6 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 	/* Close Pipes */
 	if (close(wiimote->mesg_pipe[0]) || close(wiimote->mesg_pipe[1])) {
 		cwiid_err(wiimote, "Pipe close error (mesg pipe)");
-	}
-	if (close(wiimote->status_pipe[0]) || close(wiimote->status_pipe[1])) {
-		cwiid_err(wiimote, "Pipe close error (status pipe)");
 	}
 	if (close(wiimote->rw_pipe[0]) || close(wiimote->rw_pipe[1])) {
 		cwiid_err(wiimote, "Pipe close error (rw pipe)");

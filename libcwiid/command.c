@@ -56,7 +56,7 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 
    if (len+2 > sizeof(buf)) {
 		cwiid_err( wiimote, "cwiid_send_prt: %d bytes over maximum", len+2-sizeof(buf) );
-		return -1;
+      return -1;
 	}
 
 	buf[0] = BT_TRANS_SET_REPORT | BT_PARAM_OUTPUT;
@@ -76,18 +76,37 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
       return -1;
 	}
 
-	return 0;
+   return 0;
 }
 
 int cwiid_request_status(cwiid_wiimote_t *wiimote)
 {
 	unsigned char data;
 
+   /* Send status request. */
+   if (pthread_mutex_lock( &wiimote->status_mutex )) {
+      cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+      return -1;
+   }
+
 	data = 0;
 	if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
 		cwiid_err(wiimote, "Status request error");
 		return -1;
 	}
+
+   /* Wait for conditional to indicate a status reading. */
+   if (pthread_cond_wait( &wiimote->status_cond, &wiimote->status_mutex )) {
+      cwiid_err( wiimote, "Conditional wait error (status cond)" );
+      pthread_mutex_unlock( &wiimote->status_mutex );
+		return -1;
+   }
+
+   /* Free status lock. */
+   if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+		return -1;
+   }
 
 	return 0;
 }

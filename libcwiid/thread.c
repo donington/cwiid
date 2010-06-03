@@ -33,8 +33,17 @@ void *router_thread(struct wiimote *wiimote)
 	char err, print_clock_err = 1;
 
 	while (1) {
+
 		/* Read packet */
-		len = read(wiimote->int_socket, buf, READ_BUF_LEN);
+		len = read( wiimote->int_socket, buf, READ_BUF_LEN );
+
+      /* Lock it. */
+      if (pthread_mutex_lock( &wiimote->status_mutex )) {
+         cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+         break;
+      }
+
+      /* Get time. */
 		ma.count = 0;
 		if (clock_gettime(CLOCK_REALTIME, &ma.timestamp)) {
 			if (print_clock_err) {
@@ -42,11 +51,16 @@ void *router_thread(struct wiimote *wiimote)
 				print_clock_err = 0;
 			}
 		}
+
 		err = 0;
 		if ((len == -1) || (len == 0)) {
 			process_error(wiimote, len, &ma);
 			write_mesg_array(wiimote, &ma);
 			/* Quit! */
+         if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+            cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+            break;
+         }
 			break;
 		}
 		else {
@@ -63,6 +77,13 @@ void *router_thread(struct wiimote *wiimote)
 			switch (buf[1]) {
 			case RPT_STATUS:
 				err = process_status(wiimote, &buf[2], &ma);
+
+            /* Signal status recieved. */
+            if (pthread_cond_broadcast( &wiimote->status_cond )) {
+               cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
+               pthread_mutex_unlock( &wiimote->status_mutex );
+               break;
+            }
 				break;
 			case RPT_BTN:
 				err = process_btn(wiimote, &buf[2], &ma);
@@ -132,124 +153,7 @@ void *router_thread(struct wiimote *wiimote)
 				}
 			}
 		}
-	}
 
-	return NULL;
-}
-
-void *status_thread(struct wiimote *wiimote)
-{
-	struct mesg_array ma;
-	struct cwiid_status_mesg *status_mesg;
-	unsigned char buf[2];
-
-	ma.count = 1;
-	status_mesg = &ma.array[0].status_mesg;
-
-	while (1) {
-      if (pthread_mutex_lock( &wiimote->status_mutex )) {
-         cwiid_err( wiimote, "Mutex lock error (status mutex)" );
-         break;
-      }
-
-		if (full_read(wiimote->status_pipe[0], status_mesg,
-		              sizeof *status_mesg)) {
-			cwiid_err(wiimote, "Pipe read error (status)");
-			/* Quit! */
-         pthread_mutex_unlock( &wiimote->status_mutex );
-			break;
-		}
-
-		if (status_mesg->type != CWIID_MESG_STATUS) {
-			cwiid_err(wiimote, "Bad message on status pipe");
-         pthread_mutex_unlock( &wiimote->status_mutex );
-			continue;
-		}
-
-		if (status_mesg->ext_type == CWIID_EXT_UNKNOWN) {
-			/* Read extension ID */
-			if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
-				cwiid_err(wiimote, "Read error (extension error)");
-				status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-			}
-			/* If the extension didn't change, or if the extension is a
-			 * MotionPlus, no init necessary */
-			switch ((buf[0] << 8) | buf[1]) {
-			case EXT_NONE:
-				status_mesg->ext_type = CWIID_EXT_NONE;
-				break;
-			case EXT_NUNCHUK:
-				status_mesg->ext_type = CWIID_EXT_NUNCHUK;
-				break;
-			case EXT_CLASSIC:
-				status_mesg->ext_type = CWIID_EXT_CLASSIC;
-				break;
-			case EXT_BALANCE:
-				status_mesg->ext_type = CWIID_EXT_BALANCE;
-				break;
-			case EXT_MOTIONPLUS:
-				status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
-				break;
-			case EXT_PARTIAL:
-				/* Everything (but MotionPlus) shows up as partial until initialized */
-				buf[0] = 0x55;
-				buf[1] = 0x00;
-				/* Initialize extension register space */
-				if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &buf[0])) {
-					cwiid_err(wiimote, "Extension initialization error");
-					status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-				}
-				else if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &buf[1])) {
-						cwiid_err(wiimote, "Extension initialization error");
-						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-				}
-				/* Read extension ID */
-				else if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
-					cwiid_err(wiimote, "Read error (extension error)");
-					status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-				}
-				else {
-					switch ((buf[0] << 8) | buf[1]) {
-					case EXT_NONE:
-					case EXT_PARTIAL:
-						status_mesg->ext_type = CWIID_EXT_NONE;
-						break;
-					case EXT_NUNCHUK:
-						status_mesg->ext_type = CWIID_EXT_NUNCHUK;
-						break;
-					case EXT_CLASSIC:
-						status_mesg->ext_type = CWIID_EXT_CLASSIC;
-						break;
-					case EXT_BALANCE:
-						status_mesg->ext_type = CWIID_EXT_BALANCE;
-						break;
-					default:
-						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-						break;
-					}
-				}
-				break;
-			}
-		}
-
-		if (update_state(wiimote, &ma)) {
-			cwiid_err(wiimote, "State update error");
-		}
-		if (update_rpt_mode(wiimote, -1)) {
-			cwiid_err(wiimote, "Error reseting report mode");
-		}
-		if ((wiimote->state.rpt_mode & CWIID_RPT_STATUS) &&
-		  (wiimote->flags & CWIID_FLAG_MESG_IFC)) {
-			if (write_mesg_array(wiimote, &ma)) {
-				/* prints its own errors */
-			}
-		}
-
-      if (pthread_cond_broadcast( &wiimote->status_cond )) {
-         cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
-         pthread_mutex_unlock( &wiimote->status_mutex );
-         break;
-      }
       if (pthread_mutex_unlock( &wiimote->status_mutex )) {
          cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
          break;
@@ -258,6 +162,7 @@ void *status_thread(struct wiimote *wiimote)
 
 	return NULL;
 }
+
 
 void *mesg_callback_thread(struct wiimote *wiimote)
 {

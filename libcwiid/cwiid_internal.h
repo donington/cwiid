@@ -163,9 +163,7 @@ struct wiimote {
    /* Router thread. */
 	pthread_t router_thread;
 
-   /* Status thread. */
-	pthread_t status_thread;
-	int status_pipe[2];
+   /* Status information. */
    pthread_cond_t status_cond;
    pthread_mutex_t status_mutex;
 
@@ -190,7 +188,6 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
 void *router_thread(struct wiimote *wiimote);
-void *status_thread(struct wiimote *wiimote);
 void *mesg_callback_thread(struct wiimote *wiimote);
 
 /* util.c */
