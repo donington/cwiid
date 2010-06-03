@@ -40,13 +40,9 @@ int process_error(struct wiimote *wiimote, ssize_t len, struct mesg_array *ma)
 }
 
 
-static void process_statusUnknown( struct wiimote *wiimote, struct mesg_array *ma )
+static void process_statusUnknown( struct wiimote *wiimote, struct cwiid_status_mesg *status_mesg )
 {
-   struct cwiid_status_mesg *status_mesg;
    unsigned char buf[2];
-
-   ma->count = 1;
-   status_mesg = &ma->array[0].status_mesg;
 
    /* Read extension ID */
    if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
@@ -116,13 +112,16 @@ static void process_statusUnknown( struct wiimote *wiimote, struct mesg_array *m
 int process_status(struct wiimote *wiimote, const unsigned char *data,
                    struct mesg_array *ma)
 {
-	struct cwiid_status_mesg status_mesg;
+   struct cwiid_status_mesg *status_mesg;
 
-	status_mesg.type = CWIID_MESG_STATUS;
-	status_mesg.battery = data[5];
-	if (data[2] & 0x02) {
-		/* status_thread will figure out what it is */
-      process_statusUnknown( wiimote, ma );
+   /* New message. */
+   status_mesg = &ma->array[ma->count++].status_mesg;
+
+	status_mesg->type    = CWIID_MESG_STATUS;
+	status_mesg->battery = data[3];
+	if (data[0] & 0x02) {
+      /* Try to figure out what it is the extension controller. */
+      process_statusUnknown( wiimote, status_mesg );
 	}
 
    if (update_state(wiimote, ma)) {

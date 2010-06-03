@@ -59,7 +59,6 @@ void *router_thread(struct wiimote *wiimote)
 			/* Quit! */
          if (pthread_mutex_unlock( &wiimote->status_mutex )) {
             cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
-            break;
          }
 			break;
 		}
@@ -76,7 +75,8 @@ void *router_thread(struct wiimote *wiimote)
 			printf("\n"); */
 			switch (buf[1]) {
 			case RPT_STATUS:
-				err = process_status(wiimote, &buf[2], &ma);
+				err = process_btn(wiimote, &buf[2], &ma ) ||
+                  process_status(wiimote, &buf[4], &ma);
 
             /* Signal status recieved. */
             if (pthread_cond_broadcast( &wiimote->status_cond )) {
