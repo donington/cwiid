@@ -178,6 +178,7 @@ struct balance_cal {
 struct cwiid_status_mesg {
 	enum cwiid_mesg_type type;
 	uint8_t battery;
+   uint8_t status;
 	enum cwiid_ext_type ext_type;
 };	
 
@@ -285,15 +286,18 @@ union ext_state {
 };
 
 struct cwiid_state {
-	uint8_t rpt_mode;
-	uint8_t led;
-	uint8_t rumble;
-	uint8_t battery;
-	uint16_t buttons;
-	uint8_t acc[3];
-	struct cwiid_ir_src ir_src[CWIID_IR_SRC_COUNT];
-	enum cwiid_ext_type ext_type;
-	union ext_state ext;
+	uint8_t rpt_mode; /**< Current report mode. */
+	uint8_t led;      /**< LED Status. */
+	uint8_t rumble;   /**< Rumble level. */
+	uint8_t battery;  /**< Battery level. */
+	uint16_t buttons; /**< Button status. */
+	uint8_t acc[3];   /**< Accelerometer data. */
+   int lowbat;       /**< Is battery low? */
+   int speaker;      /**< Is speaker enabled? */
+   int ir_cam;       /**< Is camera enabled? */
+	struct cwiid_ir_src ir_src[CWIID_IR_SRC_COUNT]; /**< IR status. */
+	enum cwiid_ext_type ext_type; /**< Extension plugged in. */
+	union ext_state ext; /**< State of the extension. */
 	enum cwiid_error error;
 };
 

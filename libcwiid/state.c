@@ -40,6 +40,10 @@ int update_state(struct wiimote *wiimote, struct mesg_array *ma)
 				memset(&wiimote->state.ext, 0, sizeof wiimote->state.ext);
 				wiimote->state.ext_type = mesg->status_mesg.ext_type;
 			}
+         wiimote->state.lowbat  = mesg->status_mesg.status & 0x01;
+         wiimote->state.speaker = mesg->status_mesg.status & 0x04;
+         wiimote->state.ir_cam  = mesg->status_mesg.status & 0x08;
+         wiimote->state.led     = (mesg->status_mesg.status & 0xF0) >> 4;
 			break;
 		case CWIID_MESG_BTN:
 			wiimote->state.buttons = mesg->btn_mesg.buttons;
