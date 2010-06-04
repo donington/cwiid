@@ -30,6 +30,8 @@ cwiid_err_t cwiid_err_default;
 
 static cwiid_err_t *cwiid_err_func = &cwiid_err_default;
 
+static int print_clock_err    = 1;
+
 int cwiid_set_err(cwiid_err_t *err)
 {
 	/* TODO: assuming pointer assignment is atomic operation */
@@ -200,3 +202,25 @@ int cancel_mesg_callback(struct wiimote *wiimote)
 
 	return ret;
 }
+
+
+/**
+ * @brief Initializes the message array.
+ *
+ *    @param ma Message array to initialize.
+ *    @return 0 on success.
+ */
+int mesg_init( struct wiimote *wiimote, struct mesg_array *ma )
+{
+   ma->count = 0;
+   if (clock_gettime( CLOCK_REALTIME, &ma->timestamp )) {
+      if (print_clock_err) {
+         print_clock_err = 0;
+         cwiid_err( wiimote, "clock_gettime error" );
+         return -1;
+      }
+   }
+   return 0;
+}
+
+

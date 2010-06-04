@@ -53,6 +53,7 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
                    size_t len, const void *data)
 {
 	unsigned char buf[32];
+   int i;
 
    if (len+2 > sizeof(buf)) {
 		cwiid_err( wiimote, "cwiid_send_prt: %d bytes over maximum", len+2-sizeof(buf) );
@@ -67,6 +68,12 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 	if (!(flags & CWIID_SEND_RPT_NO_RUMBLE)) {
 		buf[2] |= wiimote->state.rumble;
 	}
+
+   /* Debugging. */
+   printf( "OUT: " );
+   for (i=0; (size_t)i<len+2; i++)
+      printf( "%02x ", buf[i] );
+   printf( "\n" );
 
 	if (write(wiimote->ctl_socket, buf, len+2) != (ssize_t)(len+2)) {
 		cwiid_err(wiimote, "cwiid_send_rpt: write: %s", strerror(errno));
@@ -83,30 +90,18 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
 {
 	unsigned char data;
 
-   /* Send status request. */
-   if (pthread_mutex_lock( &wiimote->status_mutex )) {
-      cwiid_err( wiimote, "Mutex lock error (status mutex)" );
-      return -1;
-   }
+   /* Prepare to wait on event. */
+   rpt_wait_start( wiimote );
 
+   /* Send status request. */
 	data = 0;
 	if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
 		cwiid_err(wiimote, "Status request error");
 		return -1;
 	}
 
-   /* Wait for conditional to indicate a status reading. */
-   if (pthread_cond_wait( &wiimote->status_cond, &wiimote->status_mutex )) {
-      cwiid_err( wiimote, "Conditional wait error (status cond)" );
-      pthread_mutex_unlock( &wiimote->status_mutex );
-		return -1;
-   }
-
-   /* Free status lock. */
-   if (pthread_mutex_unlock( &wiimote->status_mutex )) {
-      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
-		return -1;
-   }
+   /* Wait on event. */
+   rpt_wait_end( wiimote, RPT_STATUS, NULL );
 
 	return 0;
 }
@@ -156,12 +151,12 @@ int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 	int ret = 0;
 
 	/* Compose read request packet */
-	buf[0]=flags & (CWIID_RW_EEPROM | CWIID_RW_REG);
-	buf[1]=(unsigned char)((offset>>16) & 0xFF);
-	buf[2]=(unsigned char)((offset>>8) & 0xFF);
-	buf[3]=(unsigned char)(offset & 0xFF);
-	buf[4]=(unsigned char)((len>>8) & 0xFF);
-	buf[5]=(unsigned char)(len & 0xFF);
+	buf[0] = flags & (CWIID_RW_EEPROM | CWIID_RW_REG);
+	buf[1] = (unsigned char)((offset>>16) & 0xFF);
+	buf[2] = (unsigned char)((offset>>8) & 0xFF);
+	buf[3] = (unsigned char)(offset & 0xFF);
+	buf[4] = (unsigned char)((len>>8) & 0xFF);
+	buf[5] = (unsigned char)(len & 0xFF);
 
 	/* Lock wiimote rw access */
 	if (pthread_mutex_lock(&wiimote->rw_mutex)) {
@@ -233,7 +228,7 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 	int ret = 0;
 
 	/* Compose write packet header */
-	buf[0]=flags;
+	buf[0] = flags;
 
 	/* Lock wiimote rw access */
 	if (pthread_mutex_lock(&wiimote->rw_mutex)) {

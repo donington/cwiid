@@ -59,6 +59,7 @@
 #define INT_PSM	19
 
 /* Report numbers */
+#define RPT_NULL              0x00
 #define RPT_LED_RUMBLE			0x11
 #define RPT_RPT_MODE			0x12
 #define RPT_IR_ENABLE1			0x13
@@ -162,10 +163,10 @@ struct wiimote {
 
    /* Router thread. */
 	pthread_t router_thread;
-
-   /* Status information. */
-   pthread_cond_t status_cond;
-   pthread_mutex_t status_mutex;
+   pthread_cond_t router_cond; /**< Router conditional. */
+   pthread_mutex_t router_mutex; /**< Router mutex. */
+   unsigned char router_rpt_wait; /**< Router RPT to wait on. */ 
+   unsigned char *router_rpt_buf; /**< Router RPT buffer to hook. */
 
    /* Message thread. */
 	pthread_t mesg_callback_thread;
@@ -187,6 +188,8 @@ struct wiimote {
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
+int rpt_wait_start( struct wiimote *wiimote );
+ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf );
 void *router_thread(struct wiimote *wiimote);
 void *mesg_callback_thread(struct wiimote *wiimote);
 
@@ -200,6 +203,7 @@ int write_mesg_array(struct wiimote *wiimote, struct mesg_array *ma);
 int read_mesg_array(int fd, struct mesg_array *ma);
 int cancel_rw(struct wiimote *wiimote);
 int cancel_mesg_callback(struct wiimote *wiimote);
+int mesg_init( struct wiimote *wiimote, struct mesg_array *ma );
 
 /* process.c */
 int process_error(struct wiimote *, ssize_t, struct mesg_array *);

@@ -24,40 +24,105 @@
 #include <unistd.h>
 #include "cwiid_internal.h"
 
+
 #define READ_BUF_LEN 23
+
+
+
+int rpt_wait_start( struct wiimote *wiimote )
+{
+   if (pthread_mutex_lock( &wiimote->router_mutex )) {
+      cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+      return -1;
+   }
+
+   return 0;
+}
+
+
+ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf )
+{
+   /* Make sure not already set. */
+   if (wiimote->router_rpt_wait != RPT_NULL) {
+      cwiid_err( wiimote, "Some other thread is already waiting on the wiimote rpt queue" );
+      pthread_mutex_unlock( &wiimote->router_mutex );
+      return -1;
+   }
+
+   /* Set RPT to wait on. */
+   wiimote->router_rpt_wait = rpt;
+   wiimote->router_rpt_buf  = buf;
+
+   /* Wait for conditional to indicate a status reading. */
+   if (pthread_cond_wait( &wiimote->router_cond, &wiimote->router_mutex )) {
+      cwiid_err( wiimote, "Conditional wait error (status cond)" );
+      pthread_mutex_unlock( &wiimote->router_mutex );
+      return -1;
+   }
+
+   /* Clear wait RPT. */
+   wiimote->router_rpt_wait = RPT_NULL;
+   wiimote->router_rpt_buf  = NULL;
+
+   /* Free status lock. */
+   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
+      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+      return -1;
+   }
+
+   return 0;
+}
+
+
+/**
+ * @brief Handles routing the packets recieved from the wiimote.
+ *
+ * Packets can be diverted with rpt_wait_start and rpt_wait_end.
+ *
+ * @code
+ *
+ * wiimote --> router thread --> process
+ *                  |
+ *                  v
+ *             rpt_wait_end
+ *
+ * @endcode
+ */
 void *router_thread(struct wiimote *wiimote)
 {
 	unsigned char buf[READ_BUF_LEN];
 	ssize_t len;
 	struct mesg_array ma;
-	char err, print_clock_err = 1;
+	char err;
+   int i;
 
 	while (1) {
 
 		/* Read packet */
 		len = read( wiimote->int_socket, buf, READ_BUF_LEN );
 
+      /* Print recieved packet. */
+      printf( "IN:  " );
+      for (i=0; i<len; i++)
+         printf( "%02x ", buf[i] );
+      printf( "\n" );
+
       /* Lock it. */
-      if (pthread_mutex_lock( &wiimote->status_mutex )) {
+      if (pthread_mutex_lock( &wiimote->router_mutex )) {
          cwiid_err( wiimote, "Mutex lock error (status mutex)" );
          break;
       }
 
-      /* Get time. */
-		ma.count = 0;
-		if (clock_gettime(CLOCK_REALTIME, &ma.timestamp)) {
-			if (print_clock_err) {
-				cwiid_err(wiimote, "clock_gettime error");
-				print_clock_err = 0;
-			}
-		}
+      /* Initialize the message array. */
+      mesg_init( wiimote, &ma );
+      /* Already returns error. */
 
 		err = 0;
 		if ((len == -1) || (len == 0)) {
 			process_error(wiimote, len, &ma);
 			write_mesg_array(wiimote, &ma);
 			/* Quit! */
-         if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+         if (pthread_mutex_unlock( &wiimote->router_mutex )) {
             cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
          }
 			break;
@@ -68,6 +133,32 @@ void *router_thread(struct wiimote *wiimote)
 				cwiid_err(wiimote, "Invalid packet type");
 			}
 
+         /* See if we must signal on an RPT. */
+         if ((wiimote->router_rpt_wait != RPT_NULL) &&
+               (buf[1] == wiimote->router_rpt_wait)) {
+
+            /* Signal recieved. */
+            if (pthread_cond_broadcast( &wiimote->router_cond )) {
+               cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
+               pthread_mutex_unlock( &wiimote->router_mutex );
+               break;
+            }
+
+            /* Check if we must copy data over. */
+            if (wiimote->router_rpt_buf != NULL) {
+
+               /* Copy over. */
+               memcpy( wiimote->router_rpt_buf, buf, sizeof(buf) );
+
+               /* Unlock. */
+               if (pthread_mutex_unlock( &wiimote->router_mutex )) {
+                  cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+                  break;
+               }
+               continue;
+            }
+         }
+
 			/* Main switch */
 			/* printf("%.2X %.2X %.2X %.2X  %.2X %.2X %.2X %.2X\n", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 			printf("%.2X %.2X %.2X %.2X  %.2X %.2X %.2X %.2X\n", buf[8], buf[9], buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]);
@@ -77,13 +168,6 @@ void *router_thread(struct wiimote *wiimote)
 			case RPT_STATUS:
 				err = process_btn(wiimote, &buf[2], &ma ) ||
                   process_status(wiimote, &buf[4], &ma);
-
-            /* Signal status recieved. */
-            if (pthread_cond_broadcast( &wiimote->status_cond )) {
-               cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
-               pthread_mutex_unlock( &wiimote->status_mutex );
-               break;
-            }
 				break;
 			case RPT_BTN:
 				err = process_btn(wiimote, &buf[2], &ma);
@@ -154,7 +238,8 @@ void *router_thread(struct wiimote *wiimote)
 			}
 		}
 
-      if (pthread_mutex_unlock( &wiimote->status_mutex )) {
+      /* Unlock. */
+      if (pthread_mutex_unlock( &wiimote->router_mutex )) {
          cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
          break;
       }
