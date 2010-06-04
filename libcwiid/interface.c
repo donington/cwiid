@@ -77,7 +77,7 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
       return -1;
   
    /* Set as detected. */
-   wiimote->flags &= CWIID_FLAG_MOTIONPLUS;
+   wiimote->flags |= CWIID_FLAG_MOTIONPLUS;
    wiimote->state.ext_type = CWIID_EXT_MOTIONPLUS;
    memset( &wiimote->state.ext, 0, sizeof(wiimote->state.ext) );
 
@@ -86,6 +86,8 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
 
 int cwiid_enable(cwiid_wiimote_t *wiimote, int flags)
 {
+   /* Set flags. */
+   wiimote->flags |= (flags & ~CWIID_FLAG_MOTIONPLUS);
 
 	if ((flags & CWIID_FLAG_NONBLOCK) &&
 	  !(wiimote->flags & CWIID_FLAG_NONBLOCK)) {
@@ -93,8 +95,6 @@ int cwiid_enable(cwiid_wiimote_t *wiimote, int flags)
 			cwiid_err(wiimote, "File control error (mesg pipe)");
 			return -1;
 		}
-      /* Set the flag. */
-      wiimote->flags &= CWIID_FLAG_NONBLOCK;
 	}
 	if (flags & CWIID_FLAG_MOTIONPLUS) {
       cwiid_enable_motionplus( wiimote );

@@ -53,7 +53,6 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
                    size_t len, const void *data)
 {
 	unsigned char buf[32];
-   int i;
 
    if (len+2 > sizeof(buf)) {
 		cwiid_err( wiimote, "cwiid_send_prt: %d bytes over maximum", len+2-sizeof(buf) );
@@ -70,10 +69,13 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 	}
 
    /* Debugging. */
+#ifdef DEBUG_IO
+   int i;
    printf( "OUT: " );
    for (i=0; (size_t)i<len+2; i++)
       printf( "%02x ", buf[i] );
    printf( "\n" );
+#endif /* DEBUG_IO */
 
 	if (write(wiimote->ctl_socket, buf, len+2) != (ssize_t)(len+2)) {
 		cwiid_err(wiimote, "cwiid_send_rpt: write: %s", strerror(errno));

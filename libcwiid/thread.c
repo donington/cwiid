@@ -95,7 +95,6 @@ void *router_thread(struct wiimote *wiimote)
 	ssize_t len;
 	struct mesg_array ma;
 	char err;
-   int i;
 
 	while (1) {
 
@@ -103,10 +102,13 @@ void *router_thread(struct wiimote *wiimote)
 		len = read( wiimote->int_socket, buf, RPT_READ_LEN );
 
       /* Print recieved packet. */
+#ifdef DEBUG_IO
+      int i;
       printf( "IN:  " );
       for (i=0; i<len; i++)
          printf( "%02x ", buf[i] );
       printf( "\n" );
+#endif /* DEBUG_IO */
 
       /* Lock it. */
       if (pthread_mutex_lock( &wiimote->router_mutex )) {
