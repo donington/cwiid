@@ -189,7 +189,7 @@ struct cwiid_btn_mesg {
 
 struct cwiid_acc_mesg {
 	enum cwiid_mesg_type type;
-	uint8_t acc[3];
+	uint16_t acc[3];
 };
 
 struct cwiid_ir_src {
@@ -206,7 +206,7 @@ struct cwiid_ir_mesg {
 struct cwiid_nunchuk_mesg {
 	enum cwiid_mesg_type type;
 	uint8_t stick[2];
-	uint8_t acc[3];
+	uint16_t acc[3];
 	uint8_t buttons;
 };
 
@@ -231,6 +231,7 @@ struct cwiid_motionplus_mesg {
 	enum cwiid_mesg_type type;
 	uint16_t angle_rate[3];
 	uint8_t low_speed[3];
+   uint8_t extension;
 };
 
 struct cwiid_error_mesg {
@@ -252,6 +253,7 @@ union cwiid_mesg {
 };
 
 /* State Structs */
+union ext_state;
 struct nunchuk_state {
 	uint8_t stick[2];
 	uint8_t acc[3];
@@ -276,6 +278,11 @@ struct balance_state {
 struct motionplus_state {
 	uint16_t angle_rate[3];
 	uint8_t low_speed[3];
+   enum cwiid_ext_type ext_type; /**< It can have an extension connected. */
+   union {
+      struct nunchuk_state nunchuk;
+      struct classic_state classic;
+   } ext;
 };
 
 union ext_state {

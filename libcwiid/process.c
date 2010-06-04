@@ -165,9 +165,12 @@ int process_acc(struct wiimote *wiimote, const unsigned char *data,
 	if (wiimote->state.rpt_mode & CWIID_RPT_ACC) {
 		acc_mesg = &ma->array[ma->count++].acc_mesg;
 		acc_mesg->type = CWIID_MESG_ACC;
-		acc_mesg->acc[CWIID_X] = data[0];
-		acc_mesg->acc[CWIID_Y] = data[1];
-		acc_mesg->acc[CWIID_Z] = data[2];
+		acc_mesg->acc[CWIID_X] = ((uint16_t)data[3] << 2) |
+                               ((uint16_t)data[0] & ((1<<6) | (1<<5)));
+		acc_mesg->acc[CWIID_Y] = ((uint16_t)data[4] << 2) |
+                               ((uint16_t)data[1] & (1<<5));
+		acc_mesg->acc[CWIID_Z] = ((uint16_t)data[5] << 2) |
+                               ((uint16_t)data[1] & (1<<6));
 	}
 
 	return 0;
@@ -268,9 +271,12 @@ int process_ext(struct wiimote *wiimote, unsigned char *data,
 			nunchuk_mesg->type = CWIID_MESG_NUNCHUK;
 			nunchuk_mesg->stick[CWIID_X] = data[0];
 			nunchuk_mesg->stick[CWIID_Y] = data[1];
-			nunchuk_mesg->acc[CWIID_X] = data[2];
-			nunchuk_mesg->acc[CWIID_Y] = data[3];
-			nunchuk_mesg->acc[CWIID_Z] = data[4];
+			nunchuk_mesg->acc[CWIID_X]   = ((uint16_t)data[2]<<2) |
+                                        ((uint16_t)data[5] & ((1<<2) + (1<<3)));
+			nunchuk_mesg->acc[CWIID_Y]   = ((uint16_t)data[3]<<2) |
+                                        ((uint16_t)data[5] & ((1<<4) + (1<<5)));
+			nunchuk_mesg->acc[CWIID_Z]   = ((uint16_t)data[4]<<2) |
+                                        ((uint16_t)data[5] & ((1<<6) + (1<<7)));
 			nunchuk_mesg->buttons = ~data[5] & NUNCHUK_BTN_MASK;
 		}
 		break;
@@ -312,17 +318,35 @@ int process_ext(struct wiimote *wiimote, unsigned char *data,
 		break;
 	case CWIID_EXT_MOTIONPLUS:
 		if (wiimote->state.rpt_mode & CWIID_RPT_MOTIONPLUS) {
-			motionplus_mesg = &ma->array[ma->count++].motionplus_mesg;
-			motionplus_mesg->type = CWIID_MESG_MOTIONPLUS;
-			motionplus_mesg->angle_rate[CWIID_PHI]   = ((uint16_t)data[5] & 0xFC)<<6 |
-			                                            (uint16_t)data[2];
-			motionplus_mesg->angle_rate[CWIID_THETA] = ((uint16_t)data[4] & 0xFC)<<6 |
-			                                            (uint16_t)data[1];
-			motionplus_mesg->angle_rate[CWIID_PSI]   = ((uint16_t)data[3] & 0xFC)<<6 |
-			                                            (uint16_t)data[0];
-			motionplus_mesg->low_speed[CWIID_PHI]    = ((uint8_t)data[3] & 0x01);
-			motionplus_mesg->low_speed[CWIID_THETA]  = ((uint8_t)data[4] & 0x02)>>1;
-			motionplus_mesg->low_speed[CWIID_PSI]    = ((uint8_t)data[3] & 0x02)>>1;
+         /* Motionplus data. */
+         if (((uint8_t)data[5] & 0x02) == 0x02) {
+            motionplus_mesg = &ma->array[ma->count++].motionplus_mesg;
+            motionplus_mesg->type = CWIID_MESG_MOTIONPLUS;
+            motionplus_mesg->angle_rate[CWIID_PHI]   = ((uint16_t)data[5] & 0xFC)<<6 |
+                                                        (uint16_t)data[2];
+            motionplus_mesg->angle_rate[CWIID_THETA] = ((uint16_t)data[4] & 0xFC)<<6 |
+                                                        (uint16_t)data[1];
+            motionplus_mesg->angle_rate[CWIID_PSI]   = ((uint16_t)data[3] & 0xFC)<<6 |
+                                                        (uint16_t)data[0];
+            motionplus_mesg->low_speed[CWIID_PHI]    = ((uint8_t)data[3] & 0x01);
+            motionplus_mesg->low_speed[CWIID_THETA]  = ((uint8_t)data[4] & 0x02)>>1;
+            motionplus_mesg->low_speed[CWIID_PSI]    = ((uint8_t)data[3] & 0x02)>>1;
+            motionplus_mesg->extension               = ((uint8_t)data[4] & 0x01);
+         }
+         /* Nunchuk passthrough data. */
+         else if (((uint8_t)data[5] & 0x02) == 0x00) {
+            nunchuk_mesg = &ma->array[ma->count++].nunchuk_mesg;
+            nunchuk_mesg->type = CWIID_MESG_NUNCHUK;
+            nunchuk_mesg->stick[CWIID_X] = data[0];
+            nunchuk_mesg->stick[CWIID_Y] = data[1];
+            nunchuk_mesg->acc[CWIID_X]   = ((uint16_t)data[2]<<2) |
+                                           (((uint16_t)data[5] & (1<<4)) << 1);
+            nunchuk_mesg->acc[CWIID_Y]   = ((uint16_t)data[3]<<2) |
+                                           (((uint16_t)data[5] & (1<<5)) << 1);
+            nunchuk_mesg->acc[CWIID_Z]   = ((uint16_t)data[4]<<2) |
+                                           ((uint16_t)data[5] & ((1<<6) + (1<<7)));
+            nunchuk_mesg->buttons = ~((data[5] & (1<<3 | 1<<2)) >> 2);
+         }
 		}
 		break;
 	}
