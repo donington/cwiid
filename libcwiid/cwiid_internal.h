@@ -195,6 +195,8 @@ struct wiimote {
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
+int router_pause( struct wiimote *wiimote );
+int router_resume( struct wiimote *wiimote );
 int rpt_wait_start( struct wiimote *wiimote );
 ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process );
 void *router_thread(struct wiimote *wiimote);

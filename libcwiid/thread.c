@@ -25,17 +25,44 @@
 #include "cwiid_internal.h"
 
 
-int rpt_wait_start( struct wiimote *wiimote )
+/**
+ * @brief Wrapper around the mutex to lock the router thread.
+ */
+int router_pause( struct wiimote *wiimote )
 {
    if (pthread_mutex_lock( &wiimote->router_mutex )) {
       cwiid_err( wiimote, "Mutex lock error (status mutex)" );
       return -1;
    }
-
    return 0;
 }
 
 
+/**
+ * @brief Wrapper around the mutex to unlock the router thread.
+ */
+int router_resume( struct wiimote *wiimote )
+{
+   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
+      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+      return -1;
+   }
+   return 0;
+}
+
+
+/**
+ * @brief Prepares the ground to wait for an RPT message.
+ */
+int rpt_wait_start( struct wiimote *wiimote )
+{
+   return router_pause( wiimote );
+}
+
+
+/**
+ * @brief Actually waits for the RPT message to arrive.
+ */
 ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process )
 {
    /* Make sure not already set. */
@@ -65,13 +92,8 @@ ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char 
    wiimote->router_rpt_buf  = NULL;
    wiimote->router_rpt_process = 1;
 
-   /* Free status lock. */
-   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
-      return -1;
-   }
-
-   return 0;
+   /* Resume processing. */
+   return router_resume( wiimote );
 }
 
 
