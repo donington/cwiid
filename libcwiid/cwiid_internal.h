@@ -26,6 +26,9 @@
 
 #define DEFAULT_TIMEOUT	5
 
+#define RPT_READ_LEN 23 /**< Maximum length of a read packet. */
+
+
 /* Bluetooth magic numbers */
 #define BT_TRANS_MASK		0xF0
 #define BT_TRANS_HANDSHAKE	0x00
@@ -167,6 +170,7 @@ struct wiimote {
    pthread_mutex_t router_mutex; /**< Router mutex. */
    unsigned char router_rpt_wait; /**< Router RPT to wait on. */ 
    unsigned char *router_rpt_buf; /**< Router RPT buffer to hook. */
+   int router_rpt_process; /**< Whether the router sohuld still process it. */
 
    /* Message thread. */
 	pthread_t mesg_callback_thread;
@@ -189,7 +193,7 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
 int rpt_wait_start( struct wiimote *wiimote );
-ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf );
+ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process );
 void *router_thread(struct wiimote *wiimote);
 void *mesg_callback_thread(struct wiimote *wiimote);
 

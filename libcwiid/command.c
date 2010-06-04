@@ -101,7 +101,7 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
 	}
 
    /* Wait on event. */
-   rpt_wait_end( wiimote, RPT_STATUS, NULL );
+   rpt_wait_end( wiimote, RPT_STATUS, NULL, 1 );
 
 	return 0;
 }

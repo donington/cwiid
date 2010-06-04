@@ -304,6 +304,7 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	wiimote->rw_status = RW_IDLE;
    wiimote->router_rpt_wait = RPT_NULL;
    wiimote->router_rpt_buf  = NULL;
+   wiimote->router_rpt_process = 1;
 
 	/* Launch interrupt socket listener and dispatch threads */
 	if (pthread_create(&wiimote->router_thread, NULL,
