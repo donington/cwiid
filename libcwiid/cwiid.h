@@ -347,6 +347,9 @@ const void *cwiid_get_data(cwiid_wiimote_t *wiimote);
 int cwiid_enable(cwiid_wiimote_t *wiimote, int flags);
 int cwiid_disable(cwiid_wiimote_t *wiimote, int flags);
 
+/* Extension. */
+int cwiid_detect_extension( struct wiimote *wiimote );
+
 /* Motionplus. */
 int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote );
 int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote );

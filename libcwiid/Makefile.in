@@ -6,7 +6,7 @@ LIB_NAME = cwiid
 MAJOR_VER = 1
 MINOR_VER = 0
 SOURCES = bluetooth.c command.c connect.c interface.c process.c state.c \
-          thread.c util.c motionplus.c
+          thread.c util.c extension.c motionplus.c
 LDLIBS += -lbluetooth -lpthread -lrt
 LIB_INST_DIR = @libdir@
 INC_INST_DIR = @includedir@

@@ -40,75 +40,6 @@ int process_error(struct wiimote *wiimote, ssize_t len, struct mesg_array *ma)
 }
 
 
-static void process_statusUnknown( struct wiimote *wiimote, struct cwiid_status_mesg *status_mesg )
-{
-   unsigned char buf[2];
-
-   /* Read extension ID */
-   if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
-      cwiid_err(wiimote, "Read error (extension error)");
-      status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-   }
-   /* If the extension didn't change, or if the extension is a
-    *           * MotionPlus, no init necessary */
-   switch ((buf[0] << 8) | buf[1]) {
-      case EXT_NONE:
-         status_mesg->ext_type = CWIID_EXT_NONE;
-         break;
-      case EXT_NUNCHUK:
-         status_mesg->ext_type = CWIID_EXT_NUNCHUK;
-         break;
-      case EXT_CLASSIC:
-         status_mesg->ext_type = CWIID_EXT_CLASSIC;
-         break;
-      case EXT_BALANCE:
-         status_mesg->ext_type = CWIID_EXT_BALANCE;
-         break;
-      case EXT_MOTIONPLUS:
-         status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
-         break;
-      case EXT_PARTIAL:
-         /* Everything (but MotionPlus) shows up as partial until initialized */
-         buf[0] = 0x55;
-         buf[1] = 0x00;
-         /* Initialize extension register space */
-         if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &buf[0])) {
-            cwiid_err(wiimote, "Extension initialization error");
-            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-         }
-         else if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &buf[1])) {
-            cwiid_err(wiimote, "Extension initialization error");
-            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-         }
-         /* Read extension ID */
-         else if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 2, &buf)) {
-            cwiid_err(wiimote, "Read error (extension error)");
-            status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-         }
-         else {
-            switch ((buf[0] << 8) | buf[1]) {
-               case EXT_NONE:
-               case EXT_PARTIAL:
-                  status_mesg->ext_type = CWIID_EXT_NONE;
-                  break;
-               case EXT_NUNCHUK:
-                  status_mesg->ext_type = CWIID_EXT_NUNCHUK;
-                  break;
-               case EXT_CLASSIC:
-                  status_mesg->ext_type = CWIID_EXT_CLASSIC;
-                  break;
-               case EXT_BALANCE:
-                  status_mesg->ext_type = CWIID_EXT_BALANCE;
-                  break;
-               default:
-                  status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-                  break;
-            }
-         }
-         break;
-   }
-}
-
 int process_status(struct wiimote *wiimote, const unsigned char *data,
                    struct mesg_array *ma)
 {
@@ -119,10 +50,12 @@ int process_status(struct wiimote *wiimote, const unsigned char *data,
 
 	status_mesg->type    = CWIID_MESG_STATUS;
 	status_mesg->battery = data[3];
+#if 0
 	if (data[0] & 0x02) {
       /* Try to figure out what it is the extension controller. */
       process_statusUnknown( wiimote, status_mesg );
 	}
+#endif
 
    /* update the state. */
    if (update_state(wiimote, ma)) {

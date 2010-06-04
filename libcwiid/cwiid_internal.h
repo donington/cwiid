@@ -28,8 +28,8 @@
 
 #define RPT_READ_LEN 23 /**< Maximum length of a read packet. */
 
-/*
 #define DEBUG_IO
+/*
 */
 
 /* Bluetooth magic numbers */
