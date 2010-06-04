@@ -209,6 +209,7 @@ ERR_HND:
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 {
 	struct wiimote *wiimote = NULL;
+   int i;
 	char mesg_pipe_init = 0, rw_pipe_init = 0,
         mesg_mutex_init = 0, state_mutex_init = 0, rw_mutex_init = 0,
         rpt_mutex_init = 0, router_mutex_init = 0, router_cond_init = 0,
@@ -320,7 +321,10 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 
    /* Update status. */
 	cwiid_set_led( wiimote, 0 );
-	cwiid_request_status( wiimote );
+   /* We do it three times in case stuff needs settling. */
+   for (i=0; i<3; i++) {
+      cwiid_request_status( wiimote );
+   }
 
 	return wiimote;
 

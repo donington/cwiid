@@ -337,9 +337,13 @@ int cwiid_close(cwiid_wiimote_t *wiimote);
 int cwiid_get_id(cwiid_wiimote_t *wiimote);
 int cwiid_set_data(cwiid_wiimote_t *wiimote, const void *data);
 const void *cwiid_get_data(cwiid_wiimote_t *wiimote);
-int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote );
 int cwiid_enable(cwiid_wiimote_t *wiimote, int flags);
 int cwiid_disable(cwiid_wiimote_t *wiimote, int flags);
+
+/* Motionplus. */
+int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote );
+int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote );
+int cwiid_disable_motionplus( cwiid_wiimote_t *wiimote );
 
 /* Interfaces */
 int cwiid_set_mesg_callback(cwiid_wiimote_t *wiimote,

@@ -26,7 +26,33 @@
 
 
 /**
+ * @brief Tries to detect a disabled motionplus.
+ */
+int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
+{
+   unsigned char wmid[] = {
+         0x00, 0x00, 0xA6, 0x20, 0x00, 0x05 };
+   unsigned char buf[RPT_READ_LEN];
+   int i;
+
+   /* Documentation reports games try up to three times. */
+   for (i=0; i<3; i++) {
+      /* Try to detect deactivated motionplus. */
+      cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf );
+
+      /* See if it's detected. */
+      if (memcmp( buf, wmid, 6 ) != 0)
+         return 0;
+   }
+
+   return 1;
+}
+
+
+/**
  * @brief Enables a Wii Motion Plus (WM+).
+ *
+ *    @param wiimote Wiimote to enable motion plus on.
  */
 int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
 {
@@ -34,7 +60,15 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
    unsigned char buf[RPT_READ_LEN];
    int ret;
    unsigned char wmid[] = {
-      0x00, 0x00, 0xA4, 0x20, 0x04, 0x05 };
+         0x00, 0x00, 0xA4, 0x20, 0x04, 0x05 };
+
+   /* Sanity check to see if it's already connected. */
+   if (wiimote->state.ext_type == CWIID_EXT_MOTIONPLUS)
+      return 0;
+
+   /* Try to detect it. */
+   if (!cwiid_detect_motionplus( wiimote ))
+      return 1;
 
    /* Must write 0x04 to 0xA600FE which will generate a status report indicating it's been plugged in. */
    data = 0x04;
@@ -67,5 +101,42 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
 
    return 0;
 }
+
+
+/**
+ * @brief Disables a connected motionplus.
+ *
+ *    @param wiimote Wiimote to disable motionplus on.
+ */
+int cwiid_disable_motionplus( cwiid_wiimote_t *wiimote )
+{
+   unsigned char data;
+   int ret;
+
+   /* Sanity check to see if it's already connected. */
+   if (wiimote->state.ext_type != CWIID_EXT_MOTIONPLUS)
+      return 0;
+
+   /* Disable it. */
+   data = 0x55;
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data );
+   if (ret < 0) {
+      return -1;
+   }
+
+   /* Initialize other extensions. */
+   data = 0x00;
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0x4A400FB, 1, &data );
+   if (ret < 0) {
+      return -1;
+   }
+
+   /* Disable extension. */
+   wiimote->state.ext_type = CWIID_EXT_NONE;
+   wiimote->flags &= ~CWIID_FLAG_MOTIONPLUS;
+ 
+   return 0;
+}
+
 
 
