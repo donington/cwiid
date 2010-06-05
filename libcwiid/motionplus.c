@@ -33,16 +33,24 @@ int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
    unsigned char wmid[] = {
          0x00, 0x00, 0xA6, 0x20, 0x00, 0x05 };
    unsigned char buf[RPT_READ_LEN];
-   int i;
+   int i, ret;
 
    /* Documentation reports games try up to three times. */
    for (i=0; i<3; i++) {
       /* Try to detect deactivated motionplus. */
-      cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf, 0 );
+      ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf, 0 );
+      if (ret < 0) {
+         return 0;
+      }
 
       /* See if it's detected. */
-      if (memcmp( buf, wmid, 6 ) != 0)
+      if (memcmp( buf, wmid, sizeof(wmid) ) != 0) {
          return 0;
+      }
+      else {
+         /* Found! */
+         break;
+      }
    }
 
    return 1;
@@ -82,7 +90,7 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
    ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA600FE, 1, &data, 1 );
    if (ret < 0) {
       /* End wait. */
-      /*rpt_wait_end( wiimote, RPT_NULL, NULL, 1 );*/
+      rpt_wait_end( wiimote );
       return -1;
    }
 
@@ -98,12 +106,12 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
    }
 
    /* Check to see if plugged in. */
-   if (cwiid_read( wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf, 0 )) {
+   if (cwiid_read( wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf, 0 ) < 0) {
       return -1;
    }
 
    /* Check if it's valid. */
-   if (memcmp( buf, wmid, 6 ) != 0) {
+   if (memcmp( buf, wmid, sizeof(wmid) ) != 0) {
       return -1;
    }
   
