@@ -45,14 +45,10 @@ int process_status(struct wiimote *wiimote, const unsigned char *data,
    /* New message. */
    status_mesg = &ma->array[ma->count++].status_mesg;
 
+   /* Detect extension. */
 	status_mesg->type    = CWIID_MESG_STATUS;
 	status_mesg->battery = data[3];
-#if 0
-	if (data[0] & 0x02) {
-      /* Try to figure out what it is the extension controller. */
-      process_statusUnknown( wiimote, status_mesg );
-	}
-#endif
+   status_mesg->extension = data[0] & 0x02;
 
    /* update the state. */
    if (update_state(wiimote, ma)) {

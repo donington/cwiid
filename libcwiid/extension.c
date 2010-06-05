@@ -43,25 +43,65 @@ static const unsigned char motionplus_classic_id[] =
 int cwiid_detect_extension( struct wiimote *wiimote )
 {
    unsigned char data[6];
-   int ret;
+   int ret, i;
+
+   printf( "Start EXT detection\n" );
+
+   /* Request status. */
+   if (cwiid_request_status( wiimote )) {
+      printf( "Failed to request status\n" );
+      return CWIID_EXT_UNKNOWN;
+   }
+
+   /* If already connected return that. */
+   if (wiimote->state.ext_type != CWIID_EXT_UNKNOWN) {
+      printf( "No extension detected\n" );
+      return wiimote->state.ext_type;
+   }
+
+   /* Start locking. */
+   ret = rpt_wait_start( wiimote );
+   if (ret) {
+      return CWIID_EXT_UNKNOWN;
+   }
+
+   printf( "Deactivating encryption\n" );
 
    /* Deactivate encryption. */
    data[0] = 0x55;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0], 0 );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0], 1 );
    if (ret < 0) {
+      rpt_wait_end( wiimote );
       return CWIID_EXT_UNKNOWN;
    }
    data[0] = 0x00;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[0], 0 );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[0], 1 );
    if (ret < 0) {
+      rpt_wait_end( wiimote );
       return CWIID_EXT_UNKNOWN;
    }
 
+   printf( "Deactivated encryption\n" );
+
    /* Read ID. */
-   ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA400FE, 6, &data, 0 );
+   ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA400FE, 6, &data, 1 );
    if (ret < 0) {
+      rpt_wait_end( wiimote );
       return CWIID_EXT_UNKNOWN;
    }
+
+   printf( "Read ID\n" );
+
+   /* Finish locking. */
+   ret = rpt_wait_end( wiimote );
+   if (ret) {
+      return CWIID_EXT_UNKNOWN;
+   }
+
+   printf( "EXT: " );
+   for (i=0; i<6; i++)
+      printf( "%02x ", data[i] );
+   printf( "\n" );
 
    /* Check now. */
    if (memcmp( data, nunchuk_id, sizeof(nunchuk_id) )==0) {

@@ -179,7 +179,7 @@ struct cwiid_status_mesg {
 	enum cwiid_mesg_type type;
 	uint8_t battery;
    uint8_t status;
-	enum cwiid_ext_type ext_type;
+   uint8_t extension;
 };	
 
 struct cwiid_btn_mesg {

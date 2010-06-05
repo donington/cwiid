@@ -36,14 +36,19 @@ int update_state(struct wiimote *wiimote, struct mesg_array *ma)
 		switch (mesg->type) {
 		case CWIID_MESG_STATUS:
 			wiimote->state.battery = mesg->status_mesg.battery;
-			if (wiimote->state.ext_type != mesg->status_mesg.ext_type) {
-				memset(&wiimote->state.ext, 0, sizeof wiimote->state.ext);
-				wiimote->state.ext_type = mesg->status_mesg.ext_type;
-			}
          wiimote->state.lowbat  = mesg->status_mesg.status & 0x01;
          wiimote->state.speaker = mesg->status_mesg.status & 0x04;
          wiimote->state.ir_cam  = mesg->status_mesg.status & 0x08;
          wiimote->state.led     = (mesg->status_mesg.status & 0xF0) >> 4;
+         /* Handle extension changes. */
+         if ((wiimote->state.ext_type == CWIID_EXT_NONE) &&
+               mesg->status_mesg.extension) {
+            wiimote->state.ext_type = CWIID_EXT_UNKNOWN;
+         }
+         else if ((wiimote->state.ext_type != CWIID_EXT_NONE) &&
+               !mesg->status_mesg.extension) {
+            wiimote->state.ext_type = CWIID_EXT_NONE;
+         }
 			break;
 		case CWIID_MESG_BTN:
 			wiimote->state.buttons = mesg->btn_mesg.buttons;

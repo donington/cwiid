@@ -178,6 +178,7 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
 int rpt_wait_start( struct wiimote *wiimote );
+ssize_t rpt_wait_timed( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process, int sec );
 ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process );
 int rpt_wait_end( struct wiimote *wiimote );
 void *router_thread(struct wiimote *wiimote);
