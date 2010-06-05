@@ -209,7 +209,6 @@ ERR_HND:
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 {
 	struct wiimote *wiimote = NULL;
-   int i;
 	char mesg_pipe_init = 0,
         mesg_mutex_init = 0, state_mutex_init = 0, write_mutex_init = 0,
         rpt_mutex_init = 0, router_mutex_init = 0, router_cond_init = 0,
@@ -314,14 +313,16 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	}
 	router_thread_init = 1;
 
-   /* Wait for the wiimote to first send a status report. */
-   rpt_wait( wiimote, RPT_STATUS, NULL, 1 );
+   /* Normal wiimote seems to send two RPT_BTN without any feedback. */
+   rpt_wait( wiimote, RPT_BTN, NULL, 1 );
+   rpt_wait( wiimote, RPT_BTN, NULL, 1 );
    rpt_wait_end( wiimote );
 
-#if 0
-   /* Update status. */
+   /* Get status. */
+   cwiid_request_status( wiimote );
+
+   /* Set solid. */
 	cwiid_set_led( wiimote, CWIID_LED1_ON | CWIID_LED2_ON | CWIID_LED3_ON | CWIID_LED4_ON );
-#endif
 
 	return wiimote;
 
