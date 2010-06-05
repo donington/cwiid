@@ -22,6 +22,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+#include <errno.h>
 #include "cwiid_internal.h"
 
 
@@ -277,9 +278,11 @@ void *mesg_callback_thread(struct wiimote *wiimote)
 	cwiid_mesg_callback_t *callback = wiimote->mesg_callback;
 	struct mesg_array ma;
 	int cancelstate;
+   int ret;
 
 	while (1) {
-		if (read_mesg_array(mesg_pipe, &ma)) {
+		ret = read_mesg_array(mesg_pipe, &ma);
+      if (ret != 0) {
 			cwiid_err(wiimote, "Mesg pipe read error");
 			continue;
 		}

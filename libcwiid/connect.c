@@ -297,9 +297,14 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	router_mutex_init = 1;
 
    /* Stuff to set before router thread. */
-   wiimote->router_rpt_wait = RPT_NULL;
-   wiimote->router_rpt_buf  = NULL;
-   wiimote->router_rpt_process = 1;
+   wiimote->router_rpt_wait      = RPT_NULL;
+   wiimote->router_rpt_buf       = NULL;
+   wiimote->router_rpt_process   = 1;
+	wiimote->mesg_callback        = NULL;
+	memset(&wiimote->state, 0, sizeof wiimote->state);
+
+   /* Prepare for wait. */
+   rpt_wait_start( wiimote );
 
 	/* Launch interrupt socket listener and dispatch threads */
 	if (pthread_create(&wiimote->router_thread, NULL,
@@ -309,16 +314,14 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	}
 	router_thread_init = 1;
 
-   /* Clear state before starting status thread. */
-	memset(&wiimote->state, 0, sizeof wiimote->state);
-	wiimote->mesg_callback = NULL;
+   /* Wait for the wiimote to first send a status report. */
+   rpt_wait( wiimote, RPT_STATUS, NULL, 1 );
+   rpt_wait_end( wiimote );
 
+#if 0
    /* Update status. */
-	cwiid_set_led( wiimote, 0 );
-   /* We do it three times in case stuff needs settling. */
-   for (i=0; i<3; i++) {
-      cwiid_request_status( wiimote );
-   }
+	cwiid_set_led( wiimote, CWIID_LED1_ON | CWIID_LED2_ON | CWIID_LED3_ON | CWIID_LED4_ON );
+#endif
 
 	return wiimote;
 
