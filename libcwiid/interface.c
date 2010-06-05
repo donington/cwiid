@@ -166,7 +166,7 @@ int cwiid_get_acc_cal(cwiid_wiimote_t *wiimote, enum cwiid_ext_type ext_type,
 		cwiid_err(wiimote, "Unsupported calibration request");
 		return -1;
 	}
-	if (cwiid_read(wiimote, flags, offset, 7, buf, 0)) {
+	if (cwiid_read(wiimote, flags, offset, 7, buf, 0) < 0) {
 		cwiid_err(wiimote, "Read error (%scal)", err_str);
 		return -1;
 	}
@@ -186,7 +186,7 @@ int cwiid_get_balance_cal(cwiid_wiimote_t *wiimote,
 {
 	unsigned char buf[24];
 
-	if (cwiid_read(wiimote, CWIID_RW_REG, 0xa40024, 24, buf, 0)) {
+	if (cwiid_read(wiimote, CWIID_RW_REG, 0xa40024, 24, buf, 0) < 0) {
 		cwiid_err(wiimote, "Read error (balancecal)");
 		return -1;
 	}
