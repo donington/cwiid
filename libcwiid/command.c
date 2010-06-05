@@ -104,20 +104,30 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 int cwiid_request_status(cwiid_wiimote_t *wiimote)
 {
 	unsigned char data;
+   int i, ret;
 
    /* Prepare to wait on event. */
    rpt_wait_start( wiimote );
 
-   /* Send status request. */
-	data = 0x00;
-	if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
-      rpt_wait_end( wiimote );
-		cwiid_err(wiimote, "Status request error");
-		return -1;
-	}
+   for (i=0; i<3; i++) {
+      /* Send status request. */
+      data = 0x00;
+      if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
+         cwiid_err(wiimote, "Status request error");
+         rpt_wait_end( wiimote );
+         return -1;
+      }
 
-   /* Wait on event. */
-   rpt_wait( wiimote, RPT_STATUS, NULL, 1 );
+      /* Wait on event. */
+      ret = rpt_wait_timed( wiimote, RPT_STATUS, NULL, 1, 1 );
+      if (ret < 0) {
+         rpt_wait_end( wiimote );
+         return -1;
+      }
+      else if (ret == 0) {
+         break;
+      }
+   }
 
    /* Finish wait. */
    rpt_wait_end( wiimote );
