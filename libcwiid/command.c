@@ -111,6 +111,7 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
    /* Send status request. */
 	data = 0x00;
 	if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
+      rpt_wait_end( wiimote );
 		cwiid_err(wiimote, "Status request error");
 		return -1;
 	}
