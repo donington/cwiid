@@ -35,8 +35,16 @@ int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
    unsigned char buf[RPT_READ_LEN];
    int i, ret;
 
+   /* Check status. */
+   if (cwiid_request_status( wiimote )) {
+      return -1;
+   }
+
    /* Documentation reports games try up to three times. */
    for (i=0; i<3; i++) {
+      /* Small delay. */
+      usleep( 100 * 1000 );
+
       /* Try to detect deactivated motionplus. */
       ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf, 0 );
       if (ret < 0) {
@@ -51,9 +59,6 @@ int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
          /* Found! */
          break;
       }
-
-      /* Small delay. */
-      usleep( 100 * 1000 );
    }
 
    return 1;
@@ -84,6 +89,9 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
    if (!cwiid_detect_motionplus( wiimote )) {
       return -1;
    }
+
+   /* Try to detect the extension. */
+   /*cwiid_detect_extension( wiimote );*/
 
    /* Start wait. */
    if (rpt_wait_start( wiimote )) {
@@ -131,6 +139,8 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
 
       /* Try three times. */
       for (i=0; i<3; i++) {
+         /* Small delay. */
+         usleep( 100 * 1000 );
 
          /* Request status. */
          data = 0x00;
@@ -148,9 +158,6 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
          if (extension) {
             break;
          }
-
-         /* Small delay. */
-         usleep( 100 * 1000 );
       }
 
       /* Check finally for extension. */
@@ -164,7 +171,7 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
       rpt_wait_end( wiimote );
 
       /* Try to detect the extension. */
-      cwiid_detect_extension( wiimote );
+      /*cwiid_detect_extension( wiimote );*/
    }
 
    /* Set as detected. */
