@@ -150,7 +150,6 @@ int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
                uint16_t len, void *data, int waitting)
 {
 	unsigned char buf[RPT_READ_LEN];
-	unsigned char *cursor;
    int err, slen;
 
 	/* Compose read request packet */
@@ -182,10 +181,9 @@ int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
    rpt_wait( wiimote, RPT_READ_DATA, buf, 0 );
 
    /* Process. */
-   cursor   = &((unsigned char*)data)[4];
-   err      = cursor[0] & 0x0F;
-   slen     = (cursor[0]>>4)+1;
-   memcpy( data, &cursor[3], slen );
+   err      = buf[4] & 0x0F;
+   slen     = (buf[4]>>4)+1;
+   memcpy( data, &buf[7], slen );
 
    /* Finish wait. */
    if (!waitting) {
@@ -213,6 +211,7 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
    }
 
 	/* Send packets */
+   err = 0;
 	while ((!err) && (sent < len)) {
 		/* Compose write packet */
 		buf[1] = (unsigned char)(((offset+sent)>>16) & 0xFF);
@@ -224,7 +223,7 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 		else {
 			buf[4]=(unsigned char)(len-sent);
 		}
-		memcpy(buf+5, data+sent, buf[4]);
+		memcpy( buf+5, data+sent, buf[4] );
 
 		if (cwiid_send_rpt(wiimote, 0, RPT_WRITE, 21, buf)) {
 			cwiid_err(wiimote, "Report send error (write)");
@@ -237,7 +236,8 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
       /* Wait on event. */
       rpt_wait( wiimote, RPT_WRITE_ACK, buf, 0 );
 
-      err = buf[2];
+      /* Check if it reports an error. */
+      err = buf[5];
 
       if (!err) {
          sent += buf[4];
