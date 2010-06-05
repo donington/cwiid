@@ -39,8 +39,11 @@ int rpt_wait_start( struct wiimote *wiimote )
 }
 
 
-ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process )
+ssize_t rpt_wait_timed( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process, int sec )
 {
+   struct timespec ts;
+   int ret, retval;
+
    /* Make sure not already set. */
    if (wiimote->router_rpt_wait != RPT_NULL) {
       cwiid_err( wiimote, "Some other thread is already waiting on the wiimote rpt queue" );
@@ -48,16 +51,34 @@ ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf
    }
 
    /* No RPT_UNLL means to wait. */
+   retval = 0;
    if (rpt != RPT_NULL) {
       /* Set RPT to wait on. */
       wiimote->router_rpt_wait = rpt;
       wiimote->router_rpt_buf  = buf;
       wiimote->router_rpt_process = process;
 
-      /* Wait for conditional to indicate a status reading. */
-      if (pthread_cond_wait( &wiimote->router_cond, &wiimote->router_mutex )) {
-         cwiid_err( wiimote, "Conditional wait error (status cond)" );
-         return -1;
+      if (sec < 0) {
+         /* Wait for conditional to indicate a status reading. */
+         if (pthread_cond_wait( &wiimote->router_cond, &wiimote->router_mutex )) {
+            cwiid_err( wiimote, "Conditional wait error (status cond)" );
+            retval = -1;
+         }
+      }
+      else {
+         /* Get time. */
+         clock_gettime( CLOCK_REALTIME, &ts );
+         ts.tv_sec += sec;
+
+         /* Wait for conditional to indicate a status reading. */
+         ret = pthread_cond_timedwait( &wiimote->router_cond, &wiimote->router_mutex, &ts );
+         if (ret == ETIMEDOUT) {
+            retval = 1;
+         }
+         else if (ret != 0) {
+            cwiid_err( wiimote, "Conditional wait error (status cond)" );
+            retval = -1;
+         }
       }
    }
 
@@ -67,13 +88,21 @@ ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf
    wiimote->router_rpt_process = 1;
 
    /* Signal thread can continue. */
+   /*
    if (pthread_cond_broadcast( &wiimote->router_cond )) {
       cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
       return -1;
    }
+   */
 
    /* Success. */
-   return 0;
+   return retval;
+}
+
+
+ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process )
+{
+   return rpt_wait_timed( wiimote, rpt, buf, process, -1 );
 }
 
 /**
@@ -142,12 +171,6 @@ void *router_thread(struct wiimote *wiimote)
 		/* Read packet */
 		len = read( wiimote->int_socket, buf, RPT_READ_LEN );
 
-      /* Unock it. */
-      if (pthread_mutex_unlock( &wiimote->write_mutex )) {
-         cwiid_err( wiimote, "Mutex unlock error (write mutex)" );
-         break;
-      }
-
       /* Print recieved packet. */
 #ifdef DEBUG_IO
       int i;
@@ -156,6 +179,12 @@ void *router_thread(struct wiimote *wiimote)
          printf( "%02x ", buf[i] );
       printf( "\n" );
 #endif /* DEBUG_IO */
+
+      /* Unock it. */
+      if (pthread_mutex_unlock( &wiimote->write_mutex )) {
+         cwiid_err( wiimote, "Mutex unlock error (write mutex)" );
+         break;
+      }
 
       /* Lock it. */
       if (pthread_mutex_lock( &wiimote->router_mutex )) {
