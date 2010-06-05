@@ -51,6 +51,9 @@ int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
          /* Found! */
          break;
       }
+
+      /* Small delay. */
+      usleep( 100 * 1000 );
    }
 
    return 1;
@@ -145,6 +148,9 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
          if (extension) {
             break;
          }
+
+         /* Small delay. */
+         usleep( 100 * 1000 );
       }
 
       /* Check finally for extension. */
@@ -161,7 +167,6 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
       cwiid_detect_extension( wiimote );
    }
 
-  
    /* Set as detected. */
    wiimote->flags |= CWIID_FLAG_MOTIONPLUS;
    wiimote->state.ext_type = CWIID_EXT_MOTIONPLUS;
