@@ -94,7 +94,7 @@ int exec_write_seq(struct wiimote *wiimote, unsigned int len,
 			break;
 		case WRITE_SEQ_MEM:
 			if (cwiid_write(wiimote, seq[i].flags, seq[i].report_offset,
-			                seq[i].len, seq[i].data)) {
+			                seq[i].len, seq[i].data, 0)) {
 				return -1;
 			}
 			break;
@@ -165,21 +165,6 @@ int read_mesg_array(int fd, struct mesg_array *ma)
 
 	len = ma->count * sizeof ma->array[0];
 	if (full_read(fd, &ma->array[0], len)) {
-		return -1;
-	}
-
-	return 0;
-}
-
-int cancel_rw(struct wiimote *wiimote)
-{
-	struct rw_mesg rw_mesg;
-
-	rw_mesg.type = RW_CANCEL;
-
-	if (write(wiimote->rw_pipe[1], &rw_mesg, sizeof rw_mesg) !=
-	  sizeof rw_mesg) {
-		cwiid_err(wiimote, "Pipe write error (rw)");
 		return -1;
 	}
 

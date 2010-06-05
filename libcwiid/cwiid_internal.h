@@ -145,22 +145,6 @@ struct mesg_array {
 	union cwiid_mesg array[CWIID_MAX_MESG_COUNT];
 };
 
-/* RW State/Mesg */
-enum rw_status {
-	RW_IDLE,
-	RW_READ,
-	RW_WRITE,
-	RW_CANCEL
-};
-
-struct rw_mesg {
-	enum rw_status type;
-	uint8_t error;
-	uint32_t offset;
-	uint8_t len;
-	char data[16];
-};
-
 /* Wiimote struct */
 struct wiimote {
 	int flags;
@@ -180,12 +164,9 @@ struct wiimote {
 	int mesg_pipe[2];
    pthread_mutex_t mesg_mutex;
 
-	int rw_pipe[2];
 	struct cwiid_state state;
-	enum rw_status rw_status;
 	cwiid_mesg_callback_t *mesg_callback;
 	pthread_mutex_t state_mutex;
-	pthread_mutex_t rw_mutex;
 	pthread_mutex_t rpt_mutex;
 	int id;
 	const void *data;
@@ -195,10 +176,9 @@ struct wiimote {
 cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags);
 
 /* thread.c */
-int router_pause( struct wiimote *wiimote );
-int router_resume( struct wiimote *wiimote );
 int rpt_wait_start( struct wiimote *wiimote );
-ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process );
+ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process );
+int rpt_wait_end( struct wiimote *wiimote );
 void *router_thread(struct wiimote *wiimote);
 void *mesg_callback_thread(struct wiimote *wiimote);
 
@@ -210,7 +190,6 @@ int exec_write_seq(struct wiimote *wiimote, unsigned int len,
 int full_read(int fd, void *buf, size_t len);
 int write_mesg_array(struct wiimote *wiimote, struct mesg_array *ma);
 int read_mesg_array(int fd, struct mesg_array *ma);
-int cancel_rw(struct wiimote *wiimote);
 int cancel_mesg_callback(struct wiimote *wiimote);
 int mesg_init( struct wiimote *wiimote, struct mesg_array *ma );
 
@@ -224,8 +203,6 @@ int process_ir10(struct wiimote *, const unsigned char *, struct mesg_array *);
 int process_ir12(struct wiimote *, const unsigned char *, struct mesg_array *);
 int process_ext(struct wiimote *, unsigned char *, unsigned char,
                 struct mesg_array *);
-int process_read(struct wiimote *, unsigned char *);
-int process_write(struct wiimote *, unsigned char *);
 
 /* state.c */
 int update_state(struct wiimote *wiimote, struct mesg_array *ma);

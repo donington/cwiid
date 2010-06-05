@@ -378,9 +378,9 @@ int cwiid_set_led(cwiid_wiimote_t *wiimote, uint8_t led);
 int cwiid_set_rumble(cwiid_wiimote_t *wiimote, uint8_t rumble);
 int cwiid_set_rpt_mode(cwiid_wiimote_t *wiimote, uint8_t rpt_mode);
 int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
-               uint16_t len, void *data);
+               uint16_t len, void *data, int rpt_wait);
 int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
-                uint16_t len, const void *data);
+                uint16_t len, const void *data, int rpt_wait);
 /* int cwiid_beep(cwiid_wiimote_t *wiimote); */
 
 /* HCI functions */

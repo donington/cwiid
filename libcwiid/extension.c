@@ -47,22 +47,19 @@ int cwiid_detect_extension( struct wiimote *wiimote )
 
    /* Deactivate encryption. */
    data[0] = 0x55;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0] );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0], 0 );
    if (ret < 0) {
-      cwiid_err( wiimote, "Write error (extension error)" );
       return CWIID_EXT_UNKNOWN;
    }
    data[0] = 0x00;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[0] );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[0], 0 );
    if (ret < 0) {
-      cwiid_err( wiimote, "Write error (extension error)" );
       return CWIID_EXT_UNKNOWN;
    }
 
    /* Read ID. */
-   ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA400FE, 6, &data );
+   ret = cwiid_read( wiimote, CWIID_RW_REG, 0xA400FE, 6, &data, 0 );
    if (ret < 0) {
-      cwiid_err( wiimote, "Read error (extension error)" );
       return CWIID_EXT_UNKNOWN;
    }
 

@@ -21,6 +21,7 @@
 
 int process_error(struct wiimote *wiimote, ssize_t len, struct mesg_array *ma)
 {
+   (void) wiimote;
 	struct cwiid_error_mesg *error_mesg;
 
 	error_mesg = &ma->array[ma->count++].error_mesg;
@@ -30,10 +31,6 @@ int process_error(struct wiimote *wiimote, ssize_t len, struct mesg_array *ma)
 	}
 	else {
 		error_mesg->error = CWIID_ERROR_COMM;
-	}
-
-	if (cancel_rw(wiimote)) {
-		cwiid_err(wiimote, "RW cancel error");
 	}
 
 	return 0;
@@ -287,46 +284,3 @@ int process_ext(struct wiimote *wiimote, unsigned char *data,
 	return 0;
 }
 
-int process_read(struct wiimote *wiimote, unsigned char *data)
-{
-	struct rw_mesg rw_mesg;
-
-	if (wiimote->rw_status != RW_READ) {
-		cwiid_err(wiimote, "Received unexpected read report");
-		return -1;
-	}
-
-	rw_mesg.type = RW_READ;
-	rw_mesg.len = (data[0]>>4)+1;
-	rw_mesg.error = data[0] & 0x0F;
-	memcpy(&rw_mesg.data, data+3, rw_mesg.len);
-
-	if (write(wiimote->rw_pipe[1], &rw_mesg, sizeof rw_mesg) !=
-	  sizeof rw_mesg) {
-		cwiid_err(wiimote, "RW pipe write error");
-		return -1;
-	}
-
-	return 0;
-}
-
-int process_write(struct wiimote *wiimote, unsigned char *data)
-{
-	struct rw_mesg rw_mesg;
-
-	if (wiimote->rw_status != RW_WRITE) {
-		cwiid_err(wiimote, "Received unexpected write report");
-		return -1;
-	}
-
-	rw_mesg.type = RW_WRITE;
-	rw_mesg.error = data[0];
-
-	if (write(wiimote->rw_pipe[1], &rw_mesg, sizeof rw_mesg) !=
-	  sizeof rw_mesg) {
-		cwiid_err(wiimote, "RW pipe write error");
-		return -1;
-	}
-
-	return 0;
-}

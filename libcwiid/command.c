@@ -103,7 +103,10 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
 	}
 
    /* Wait on event. */
-   rpt_wait_end( wiimote, RPT_STATUS, NULL, 1 );
+   rpt_wait( wiimote, RPT_STATUS, NULL, 1 );
+
+   /* Finish wait. */
+   rpt_wait_end( wiimote );
 
 	return 0;
 }
@@ -143,14 +146,12 @@ int cwiid_set_rpt_mode(cwiid_wiimote_t *wiimote, uint8_t rpt_mode)
 	return update_rpt_mode(wiimote, rpt_mode);
 }
 
-#define RPT_READ_REQ_LEN 6
 int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
-               uint16_t len, void *data)
+               uint16_t len, void *data, int waitting)
 {
-	unsigned char buf[RPT_READ_REQ_LEN];
-	struct rw_mesg mesg;
+	unsigned char buf[RPT_READ_LEN];
 	unsigned char *cursor;
-	int ret = 0;
+   int err, slen;
 
 	/* Compose read request packet */
 	buf[0] = flags & (CWIID_RW_EEPROM | CWIID_RW_REG);
@@ -160,87 +161,59 @@ int cwiid_read(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 	buf[4] = (unsigned char)((len>>8) & 0xFF);
 	buf[5] = (unsigned char)(len & 0xFF);
 
-	/* Lock wiimote rw access */
-	if (pthread_mutex_lock(&wiimote->rw_mutex)) {
-		cwiid_err(wiimote, "Mutex lock error (rw_mutex)");
-		return -1;
-	}
-
-	/* Setup read info */
-	wiimote->rw_status = RW_READ;
+   /* Start wait. */
+   if ((!waitting) && rpt_wait_start( wiimote )) {
+      return -1;
+   }
 
 	/* TODO: Document: user is responsible for ensuring that read/write
 	 * operations are not in flight while disconnecting.  Nothing serious,
 	 * just accesses to freed memory */
 	/* Send read request packet */
-	if (cwiid_send_rpt(wiimote, 0, RPT_READ_REQ, RPT_READ_REQ_LEN, buf)) {
+	if (cwiid_send_rpt(wiimote, 0, RPT_READ_REQ, 6, buf)) {
 		cwiid_err(wiimote, "Report send error (read)");
-		ret = -1;
-		goto CODA;
+      if (!waitting) {
+         rpt_wait_end( wiimote );
+      }
+      return -1;
 	}
 
-	/* TODO:Better sanity checks (offset) */
-	/* Read packets */
-	for (cursor = data; cursor - (unsigned char *)data < len;
-	     cursor += mesg.len) {
-		if (full_read(wiimote->rw_pipe[0], &mesg, sizeof mesg)) {
-			cwiid_err(wiimote, "Pipe read error (rw pipe)");
-			ret = -1;
-			goto CODA;
-		}
+   /* Get the packet. */
+   rpt_wait( wiimote, RPT_READ_DATA, buf, 0 );
 
-		if (mesg.type == RW_CANCEL) {
-			ret = -1;
-			goto CODA;
-		}
-		else if (mesg.type != RW_READ) {
-			cwiid_err(wiimote, "Unexpected write message");
-			ret = -1;
-			goto CODA;
-		}
+   /* Process. */
+   cursor   = &((unsigned char*)data)[4];
+   err      = cursor[0] & 0x0F;
+   slen     = (cursor[0]>>4)+1;
+   memcpy( data, &cursor[3], slen );
 
-		if (mesg.error) {
-			cwiid_err(wiimote, "Wiimote read error");
-			ret = -1;
-			goto CODA;
-		}
+   /* Finish wait. */
+   if (!waitting) {
+      rpt_wait_end( wiimote );
+   }
 
-		memcpy(cursor, &mesg.data, mesg.len);
-	}
-
-CODA:
-	/* Clear rw_status */
-	wiimote->rw_status = RW_IDLE;
-
-	/* Unlock rw_mutex */
-	if (pthread_mutex_unlock(&wiimote->rw_mutex)) {
-		cwiid_err(wiimote, "Mutex unlock error (rw_mutex) - deadlock warning");
-	}
-
-	return ret;
+   if (err) {
+      return -err;
+   }
+   return slen;
 }
 
-#define RPT_WRITE_LEN 21
 int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
-                  uint16_t len, const void *data)
+                  uint16_t len, const void *data, int waitting)
 {
-	unsigned char buf[RPT_WRITE_LEN];
+	unsigned char buf[RPT_READ_LEN];
 	uint16_t sent=0;
-	struct rw_mesg mesg;
-	int ret = 0;
+   unsigned char err;
 
 	/* Compose write packet header */
 	buf[0] = flags;
 
-	/* Lock wiimote rw access */
-	if (pthread_mutex_lock(&wiimote->rw_mutex)) {
-		cwiid_err(wiimote, "Mutex lock error (rw mutex)");
-		return -1;
-	}
+   if ((!waitting) && rpt_wait_start( wiimote )) {
+      return -1;
+   }
 
 	/* Send packets */
-	wiimote->rw_status = RW_WRITE;
-	while (sent<len) {
+	while ((!err) && (sent < len)) {
 		/* Compose write packet */
 		buf[1] = (unsigned char)(((offset+sent)>>16) & 0xFF);
 		buf[2] = (unsigned char)(((offset+sent)>>8) & 0xFF);
@@ -253,48 +226,32 @@ int cwiid_write(cwiid_wiimote_t *wiimote, uint8_t flags, uint32_t offset,
 		}
 		memcpy(buf+5, data+sent, buf[4]);
 
-		if (cwiid_send_rpt(wiimote, 0, RPT_WRITE, RPT_WRITE_LEN, buf)) {
+		if (cwiid_send_rpt(wiimote, 0, RPT_WRITE, 21, buf)) {
 			cwiid_err(wiimote, "Report send error (write)");
-			ret = -1;
-			goto CODA;
+         if (!waitting) {
+            rpt_wait_end( wiimote );
+         }
+         return -1;
 		}
 
-		/* Read packets from pipe */
-		if (read( wiimote->rw_pipe[0], &mesg, sizeof(mesg)) != sizeof(mesg) ) {
-			cwiid_err(wiimote, "Pipe read error (rw pipe)");
-			ret = -1;
-			goto CODA;
-		}
+      /* Wait on event. */
+      rpt_wait( wiimote, RPT_WRITE_ACK, buf, 0 );
 
-		if (mesg.type == RW_CANCEL) {
-			ret = -1;
-			goto CODA;
-		}
-		else if (mesg.type != RW_WRITE) {
-			cwiid_err(wiimote, "Unexpected read message");
-			ret = -1;
-			goto CODA;
-		}
+      err = buf[2];
 
-		if (mesg.error) {
-			cwiid_err(wiimote, "Wiimote write error");
-			ret = -1;
-			goto CODA;
-		};
-
-		sent += buf[4];
+      if (!err) {
+         sent += buf[4];
+      }
 	}
 
-CODA:
-	/* Clear rw_status */
-	wiimote->rw_status = RW_IDLE;
+   if (!waitting) {
+      rpt_wait_end( wiimote );
+   }
 
-	/* Unlock rw_mutex */
-	if (pthread_mutex_unlock(&wiimote->rw_mutex)) {
-		cwiid_err(wiimote, "Mutex unlock error (rw_mutex) - deadlock warning");
-	}
-
-	return ret;
+   if (err) {
+      return -err;
+   }
+   return sent;
 }
 
 

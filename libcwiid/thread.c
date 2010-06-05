@@ -26,9 +26,9 @@
 
 
 /**
- * @brief Wrapper around the mutex to lock the router thread.
+ * @brief Prepares the ground to wait for an RPT message.
  */
-int router_pause( struct wiimote *wiimote )
+int rpt_wait_start( struct wiimote *wiimote )
 {
    if (pthread_mutex_lock( &wiimote->router_mutex )) {
       cwiid_err( wiimote, "Mutex lock error (status mutex)" );
@@ -38,37 +38,11 @@ int router_pause( struct wiimote *wiimote )
 }
 
 
-/**
- * @brief Wrapper around the mutex to unlock the router thread.
- */
-int router_resume( struct wiimote *wiimote )
-{
-   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
-      return -1;
-   }
-   return 0;
-}
-
-
-/**
- * @brief Prepares the ground to wait for an RPT message.
- */
-int rpt_wait_start( struct wiimote *wiimote )
-{
-   return router_pause( wiimote );
-}
-
-
-/**
- * @brief Actually waits for the RPT message to arrive.
- */
-ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process )
+ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf, int process )
 {
    /* Make sure not already set. */
    if (wiimote->router_rpt_wait != RPT_NULL) {
       cwiid_err( wiimote, "Some other thread is already waiting on the wiimote rpt queue" );
-      pthread_mutex_unlock( &wiimote->router_mutex );
       return -1;
    }
 
@@ -82,7 +56,6 @@ ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char 
       /* Wait for conditional to indicate a status reading. */
       if (pthread_cond_wait( &wiimote->router_cond, &wiimote->router_mutex )) {
          cwiid_err( wiimote, "Conditional wait error (status cond)" );
-         pthread_mutex_unlock( &wiimote->router_mutex );
          return -1;
       }
    }
@@ -92,8 +65,26 @@ ssize_t rpt_wait_end( struct wiimote *wiimote, unsigned char rpt, unsigned char 
    wiimote->router_rpt_buf  = NULL;
    wiimote->router_rpt_process = 1;
 
-   /* Resume processing. */
-   return router_resume( wiimote );
+   /* Signal thread can continue. */
+   if (pthread_cond_broadcast( &wiimote->router_cond )) {
+      cwiid_err( wiimote, "Conditional broadcast error (status cond)" );
+      return -1;
+   }
+
+   /* Success. */
+   return 0;
+}
+
+/**
+ * @brief Actually waits for the RPT message to arrive.
+ */
+int rpt_wait_end( struct wiimote *wiimote )
+{
+   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
+      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+      return -1;
+   }
+   return 0;
 }
 
 
@@ -243,11 +234,13 @@ void *router_thread(struct wiimote *wiimote)
 				err = 1;
 				break;
 			case RPT_READ_DATA:
-				err = process_read(wiimote, &buf[4]) ||
-				      process_btn(wiimote, &buf[2], &ma);
+				err = process_btn(wiimote, &buf[2], &ma);
+            cwiid_err(wiimote, "Read data event not caught");
+            err = 1;
 				break;
 			case RPT_WRITE_ACK:
-				err = process_write(wiimote, &buf[2]);
+            cwiid_err(wiimote, "Write ack event not caught");
+            err = 1;
 				break;
 			default:
 				cwiid_err(wiimote, "Unknown message type");

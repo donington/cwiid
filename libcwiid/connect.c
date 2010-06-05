@@ -210,8 +210,8 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 {
 	struct wiimote *wiimote = NULL;
    int i;
-	char mesg_pipe_init = 0, rw_pipe_init = 0,
-        mesg_mutex_init = 0, state_mutex_init = 0, rw_mutex_init = 0,
+	char mesg_pipe_init = 0,
+        mesg_mutex_init = 0, state_mutex_init = 0,
         rpt_mutex_init = 0, router_mutex_init = 0, router_cond_init = 0,
 	     router_thread_init = 0;
 	void *pthread_ret;
@@ -249,11 +249,6 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 		goto ERR_HND;
 	}
 	mesg_pipe_init = 1;
-	if (pipe( wiimote->rw_pipe )) {
-		cwiid_err(wiimote, "Pipe creation error (rw pipe)");
-		goto ERR_HND;
-	}
-	rw_pipe_init = 1;
 
 	/* Setup blocking */
 	if (fcntl( wiimote->mesg_pipe[1], F_SETFL, O_NONBLOCK) ) {
@@ -280,11 +275,6 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 		goto ERR_HND;
 	}
 	state_mutex_init = 1;
-	if (pthread_mutex_init(&wiimote->rw_mutex, NULL)) {
-		cwiid_err(wiimote, "Mutex initialization error (rw mutex)");
-		goto ERR_HND;
-	}
-	rw_mutex_init = 1;
 	if (pthread_mutex_init(&wiimote->rpt_mutex, NULL)) {
 		cwiid_err(wiimote, "Mutex initialization error (rpt mutex)");
 		goto ERR_HND;
@@ -302,7 +292,6 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	router_mutex_init = 1;
 
    /* Stuff to set before router thread. */
-	wiimote->rw_status = RW_IDLE;
    wiimote->router_rpt_wait = RPT_NULL;
    wiimote->router_rpt_buf  = NULL;
    wiimote->router_rpt_process = 1;
@@ -348,11 +337,6 @@ ERR_HND:
 				cwiid_err(wiimote, "Pipe close error (mesg pipe)");
 			}
 		}
-		if (rw_pipe_init) {
-			if (close(wiimote->rw_pipe[0]) || close(wiimote->rw_pipe[1])) {
-				cwiid_err(wiimote, "Pipe close error (rw pipe)");
-			}
-		}
 
       /* Destroy conditionals. */
       if (router_cond_init) {
@@ -365,11 +349,6 @@ ERR_HND:
 		if (state_mutex_init) {
 			if (pthread_mutex_destroy(&wiimote->state_mutex)) {
 				cwiid_err(wiimote, "Mutex destroy error (state mutex)");
-			}
-		}
-		if (rw_mutex_init) {
-			if (pthread_mutex_destroy(&wiimote->rw_mutex)) {
-				cwiid_err(wiimote, "Mutex destroy error (rw mutex)");
 			}
 		}
 		if (rpt_mutex_init) {
@@ -423,10 +402,6 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
       pthread_mutex_unlock( &wiimote->mesg_mutex );
 	}
 
-	if (cancel_rw(wiimote)) {
-		/* prints it's own errors */
-	}
-
 	/* Close sockets */
 	if (close(wiimote->int_socket)) {
 		cwiid_err(wiimote, "Socket close error (interrupt socket)");
@@ -438,9 +413,6 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 	if (close(wiimote->mesg_pipe[0]) || close(wiimote->mesg_pipe[1])) {
 		cwiid_err(wiimote, "Pipe close error (mesg pipe)");
 	}
-	if (close(wiimote->rw_pipe[0]) || close(wiimote->rw_pipe[1])) {
-		cwiid_err(wiimote, "Pipe close error (rw pipe)");
-	}
    /* Destroy conditionals. */
    if (pthread_cond_destroy( &wiimote->router_cond )) {
       cwiid_err( wiimote, "Conditional destroy error (router_cond)" );
@@ -448,9 +420,6 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 	/* Destroy mutexes */
 	if (pthread_mutex_destroy(&wiimote->state_mutex)) {
 		cwiid_err(wiimote, "Mutex destroy error (state)");
-	}
-	if (pthread_mutex_destroy(&wiimote->rw_mutex)) {
-		cwiid_err(wiimote, "Mutex destroy error (rw)");
 	}
 	if (pthread_mutex_destroy(&wiimote->rpt_mutex)) {
 		cwiid_err(wiimote, "Mutex destroy error (rpt)");

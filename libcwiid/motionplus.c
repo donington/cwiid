@@ -38,7 +38,7 @@ int cwiid_detect_motionplus( cwiid_wiimote_t *wiimote )
    /* Documentation reports games try up to three times. */
    for (i=0; i<3; i++) {
       /* Try to detect deactivated motionplus. */
-      cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf );
+      cwiid_read( wiimote, CWIID_RW_REG, 0xA600FA, 6, &buf, 0 );
 
       /* See if it's detected. */
       if (memcmp( buf, wmid, 6 ) != 0)
@@ -63,36 +63,49 @@ int cwiid_enable_motionplus( cwiid_wiimote_t *wiimote )
          0x00, 0x00, 0xA4, 0x20, 0x04, 0x05 };
 
    /* Sanity check to see if it's already connected. */
-   if (wiimote->state.ext_type == CWIID_EXT_MOTIONPLUS)
+   if (wiimote->state.ext_type == CWIID_EXT_MOTIONPLUS) {
       return 0;
+   }
 
    /* Try to detect it. */
-   if (!cwiid_detect_motionplus( wiimote ))
-      return 1;
+   if (!cwiid_detect_motionplus( wiimote )) {
+      return -1;
+   }
+
+   /* Start wait. */
+   if (rpt_wait_start( wiimote )) {
+      return -1;
+   }
 
    /* Must write 0x04 to 0xA600FE which will generate a status report indicating it's been plugged in. */
    data = 0x04;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA600FE, 1, &data );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA600FE, 1, &data, 1 );
    if (ret < 0) {
       /* End wait. */
       /*rpt_wait_end( wiimote, RPT_NULL, NULL, 1 );*/
       return -1;
    }
 
-   /* Race condition \o/. */
-   rpt_wait_start( wiimote );
-   rpt_wait_end( wiimote, RPT_STATUS, buf, 0 );
+   /* Check for status. */
+   rpt_wait( wiimote, RPT_STATUS, buf, 0 );
+
+   /* Finished wait. */
+   rpt_wait_end( wiimote );
 
    /* Check if the extension was plugged in. */
-   if (!(buf[4] & 0x02))
+   if (!(buf[4] & 0x02)) {
       return -1;
+   }
 
    /* Check to see if plugged in. */
-   cwiid_read( wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf );
+   if (cwiid_read( wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf, 0 )) {
+      return -1;
+   }
 
    /* Check if it's valid. */
-   if (memcmp( buf, wmid, 6 ) != 0)
+   if (memcmp( buf, wmid, 6 ) != 0) {
       return -1;
+   }
   
    /* Set as detected. */
    wiimote->flags |= CWIID_FLAG_MOTIONPLUS;
@@ -119,14 +132,14 @@ int cwiid_disable_motionplus( cwiid_wiimote_t *wiimote )
 
    /* Disable it. */
    data = 0x55;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0xA400F0, 1, &data, 0 );
    if (ret < 0) {
       return -1;
    }
 
    /* Initialize other extensions. */
    data = 0x00;
-   ret = cwiid_write( wiimote, CWIID_RW_REG, 0x4A400FB, 1, &data );
+   ret = cwiid_write( wiimote, CWIID_RW_REG, 0x4A400FB, 1, &data, 0 );
    if (ret < 0) {
       return -1;
    }
