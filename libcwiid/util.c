@@ -24,6 +24,8 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/time.h>
 #include "cwiid_internal.h"
 
 cwiid_err_t cwiid_err_default;
@@ -63,6 +65,29 @@ void cwiid_err(struct wiimote *wiimote, const char *str, ...)
 int verify_handshake(struct wiimote *wiimote)
 {
 	unsigned char handshake;
+   fd_set set;
+   struct timeval timeout;
+   int ret;
+
+   /* Initialize the file descriptor set. */
+   FD_ZERO( &set);
+   FD_SET( wiimote->ctl_socket, &set );
+
+   /* Set timeout. */
+   timeout.tv_sec    = 1;
+   timeout.tv_usec   = 0;
+
+   /* Check. */
+   ret = select (FD_SETSIZE, &set, NULL, NULL, &timeout);
+   if (ret == 0) {
+      cwiid_err( wiimote, "Select timeout (handshake)" );
+      return -1;
+   }
+   else if (ret < 0) {
+      cwiid_err( wiimote, "Select error (handshake)" );
+      return -1;
+   }
+
 	if (read(wiimote->ctl_socket, &handshake, 1) != 1) {
 		cwiid_err(wiimote, "Socket read error (handshake)");
 		return -1;

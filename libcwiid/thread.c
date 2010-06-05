@@ -166,15 +166,15 @@ void *router_thread(struct wiimote *wiimote)
                /* Copy over. */
                memcpy( wiimote->router_rpt_buf, buf, sizeof(buf) );
 
-               /* Unlock. */
-               if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-                  cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
-                  break;
-               }
-
                /* See if we must process still. */
-               if (!wiimote->router_rpt_process)
+               if (!wiimote->router_rpt_process) {
+                  /* Unlock. */
+                  if (pthread_mutex_unlock( &wiimote->router_mutex )) {
+                     cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+                     break;
+                  }
                   continue;
+               }
             }
          }
 

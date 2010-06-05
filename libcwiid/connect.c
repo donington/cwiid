@@ -211,7 +211,7 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 	struct wiimote *wiimote = NULL;
    int i;
 	char mesg_pipe_init = 0,
-        mesg_mutex_init = 0, state_mutex_init = 0,
+        mesg_mutex_init = 0, state_mutex_init = 0, write_mutex_init = 0,
         rpt_mutex_init = 0, router_mutex_init = 0, router_cond_init = 0,
 	     router_thread_init = 0;
 	void *pthread_ret;
@@ -275,6 +275,11 @@ cwiid_wiimote_t *cwiid_new(int ctl_socket, int int_socket, int flags)
 		goto ERR_HND;
 	}
 	state_mutex_init = 1;
+	if (pthread_mutex_init(&wiimote->write_mutex, NULL)) {
+		cwiid_err(wiimote, "Mutex initialization error (rpt mutex)");
+		goto ERR_HND;
+	}
+	write_mutex_init = 1;
 	if (pthread_mutex_init(&wiimote->rpt_mutex, NULL)) {
 		cwiid_err(wiimote, "Mutex initialization error (rpt mutex)");
 		goto ERR_HND;
@@ -351,6 +356,11 @@ ERR_HND:
 				cwiid_err(wiimote, "Mutex destroy error (state mutex)");
 			}
 		}
+		if (write_mutex_init) {
+			if (pthread_mutex_destroy(&wiimote->write_mutex)) {
+				cwiid_err(wiimote, "Mutex destroy error (rpt mutex)");
+			}
+		}
 		if (rpt_mutex_init) {
 			if (pthread_mutex_destroy(&wiimote->rpt_mutex)) {
 				cwiid_err(wiimote, "Mutex destroy error (rpt mutex)");
@@ -421,6 +431,9 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 	if (pthread_mutex_destroy(&wiimote->state_mutex)) {
 		cwiid_err(wiimote, "Mutex destroy error (state)");
 	}
+	if (pthread_mutex_destroy(&wiimote->write_mutex)) {
+		cwiid_err(wiimote, "Mutex destroy error (write)");
+	}
 	if (pthread_mutex_destroy(&wiimote->rpt_mutex)) {
 		cwiid_err(wiimote, "Mutex destroy error (rpt)");
 	}
@@ -428,7 +441,7 @@ int cwiid_close(cwiid_wiimote_t *wiimote)
 		cwiid_err(wiimote, "Mutex destroy error (mesg)");
 	}
 	if (pthread_mutex_destroy(&wiimote->router_mutex)) {
-		cwiid_err(wiimote, "Mutex destroy error (mesg)");
+		cwiid_err(wiimote, "Mutex destroy error (router)");
 	}
 
 	free(wiimote);

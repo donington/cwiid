@@ -28,8 +28,8 @@
 
 #define RPT_READ_LEN 23 /**< Maximum length of a read packet. */
 
-/*
 #define DEBUG_IO
+/*
 */
 
 /* Bluetooth magic numbers */
@@ -168,6 +168,7 @@ struct wiimote {
 	cwiid_mesg_callback_t *mesg_callback;
 	pthread_mutex_t state_mutex;
 	pthread_mutex_t rpt_mutex;
+   pthread_mutex_t write_mutex;
 	int id;
 	const void *data;
 };

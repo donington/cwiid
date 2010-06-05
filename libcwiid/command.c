@@ -53,11 +53,18 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
                    size_t len, const void *data)
 {
 	unsigned char buf[32];
+   int ret = 0;
 
    if (len+2 > sizeof(buf)) {
 		cwiid_err( wiimote, "cwiid_send_prt: %d bytes over maximum", len+2-sizeof(buf) );
 		return -1;
 	}
+
+   /* Lock mutex. */
+	if (pthread_mutex_lock(&wiimote->write_mutex)) {
+      cwiid_err( wiimote, "Locking mutex (write_mutex)" );
+      return -1;
+   }
 
 	buf[0] = BT_TRANS_SET_REPORT | BT_PARAM_OUTPUT;
 	buf[1] = report;
@@ -79,13 +86,19 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 
 	if (write(wiimote->ctl_socket, buf, len+2) != (ssize_t)(len+2)) {
 		cwiid_err(wiimote, "cwiid_send_rpt: write: %s", strerror(errno));
-      return -1;
+      ret = -1;
 	}
 	else if (verify_handshake(wiimote)) {
-      return -1;
+      ret = -1;
 	}
 
-	return 0;
+   /* Unlock mutex. */
+	if (pthread_mutex_unlock(&wiimote->write_mutex)) {
+      cwiid_err( wiimote, "Unlocking mutex (write_mutex)" );
+      ret = -1;
+   }
+
+	return ret;
 }
 
 int cwiid_request_status(cwiid_wiimote_t *wiimote)
@@ -96,7 +109,7 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
    rpt_wait_start( wiimote );
 
    /* Send status request. */
-	data = 0;
+	data = 0x00;
 	if (cwiid_send_rpt(wiimote, 0, RPT_STATUS_REQ, 1, &data)) {
 		cwiid_err(wiimote, "Status request error");
 		return -1;
