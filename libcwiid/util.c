@@ -94,7 +94,7 @@ int exec_write_seq(struct wiimote *wiimote, unsigned int len,
 			break;
 		case WRITE_SEQ_MEM:
 			if (cwiid_write(wiimote, seq[i].flags, seq[i].report_offset,
-			                seq[i].len, seq[i].data, 0)) {
+			                seq[i].len, seq[i].data, 0) < 0) {
 				return -1;
 			}
 			break;
