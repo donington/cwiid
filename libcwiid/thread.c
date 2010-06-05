@@ -32,7 +32,7 @@
 int rpt_wait_start( struct wiimote *wiimote )
 {
    if (pthread_mutex_lock( &wiimote->router_mutex )) {
-      cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+      cwiid_err( wiimote, "Mutex lock error (router mutex)" );
       return -1;
    }
    return 0;
@@ -82,7 +82,7 @@ ssize_t rpt_wait( struct wiimote *wiimote, unsigned char rpt, unsigned char *buf
 int rpt_wait_end( struct wiimote *wiimote )
 {
    if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-      cwiid_err( wiimote, "Mutex unlock error (status mutex)");
+      cwiid_err( wiimote, "Mutex unlock error (router mutex)");
       return -1;
    }
    return 0;
@@ -109,11 +109,44 @@ void *router_thread(struct wiimote *wiimote)
 	ssize_t len;
 	struct mesg_array ma;
 	char err;
+   fd_set int_set;
+   struct timeval int_timeout;
+   int ret;
+
+   /* Initialize the file descriptor set. */
+   FD_ZERO( &int_set );
+   FD_SET( wiimote->int_socket, &int_set );
+
+   /* Set timeout. */
+   int_timeout.tv_sec    = 1;
+   int_timeout.tv_usec   = 0;
 
 	while (1) {
 
+      /* Wait. */
+      ret = select( FD_SETSIZE, &int_set, NULL, NULL, &int_timeout );
+      if (ret < 0) {
+         cwiid_err( wiimote, "Select failed (router thread" );
+         break;
+      }
+      else if (ret == 0) {
+         continue;
+      }
+
+      /* Lock it. */
+      if (pthread_mutex_lock( &wiimote->write_mutex )) {
+         cwiid_err( wiimote, "Mutex lock error (write mutex)" );
+         break;
+      }
+
 		/* Read packet */
 		len = read( wiimote->int_socket, buf, RPT_READ_LEN );
+
+      /* Unock it. */
+      if (pthread_mutex_unlock( &wiimote->write_mutex )) {
+         cwiid_err( wiimote, "Mutex unlock error (write mutex)" );
+         break;
+      }
 
       /* Print recieved packet. */
 #ifdef DEBUG_IO
@@ -126,7 +159,7 @@ void *router_thread(struct wiimote *wiimote)
 
       /* Lock it. */
       if (pthread_mutex_lock( &wiimote->router_mutex )) {
-         cwiid_err( wiimote, "Mutex lock error (status mutex)" );
+         cwiid_err( wiimote, "Mutex lock error (router mutex)" );
          break;
       }
 
@@ -140,7 +173,7 @@ void *router_thread(struct wiimote *wiimote)
 			write_mesg_array(wiimote, &ma);
 			/* Quit! */
          if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-            cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+            cwiid_err( wiimote, "Mutex unlock error (router mutex)" );
          }
 			break;
 		}
@@ -171,7 +204,7 @@ void *router_thread(struct wiimote *wiimote)
                if (!wiimote->router_rpt_process) {
                   /* Unlock. */
                   if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-                     cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+                     cwiid_err( wiimote, "Mutex unlock error (router mutex)" );
                      break;
                   }
                   continue;
@@ -263,7 +296,7 @@ void *router_thread(struct wiimote *wiimote)
 
       /* Unlock. */
       if (pthread_mutex_unlock( &wiimote->router_mutex )) {
-         cwiid_err( wiimote, "Mutex unlock error (status mutex)" );
+         cwiid_err( wiimote, "Mutex unlock error (router mutex)" );
          break;
       }
 	}
