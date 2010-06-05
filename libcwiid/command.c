@@ -104,11 +104,12 @@ int cwiid_send_rpt(cwiid_wiimote_t *wiimote, uint8_t flags, uint8_t report,
 int cwiid_request_status(cwiid_wiimote_t *wiimote)
 {
 	unsigned char data;
-   int i, ret;
+   int i, ret, retval;
 
    /* Prepare to wait on event. */
    rpt_wait_start( wiimote );
 
+   retval = -1;
    for (i=0; i<3; i++) {
       /* Send status request. */
       data = 0x00;
@@ -124,7 +125,9 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
          rpt_wait_end( wiimote );
          return -1;
       }
+      /* Got what we wanted. */
       else if (ret == 0) {
+         retval = 0;
          break;
       }
    }
@@ -132,7 +135,7 @@ int cwiid_request_status(cwiid_wiimote_t *wiimote)
    /* Finish wait. */
    rpt_wait_end( wiimote );
 
-	return 0;
+	return retval;
 }
 
 int cwiid_set_led(cwiid_wiimote_t *wiimote, uint8_t led)
