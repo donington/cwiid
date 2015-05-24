@@ -23,7 +23,15 @@
 #include <pthread.h>
 #include <time.h>
 #include <unistd.h>
+#include <poll.h>
 #include "cwiid_internal.h"
+
+#define DEBUG
+#ifdef DEBUG
+  #define printd(...) fprintf(stderr, __VA_ARGS__)
+#else
+  #define printd(...)
+#endif
 
 #define READ_BUF_LEN 23
 void *router_thread(struct wiimote *wiimote)
@@ -138,125 +146,207 @@ void *router_thread(struct wiimote *wiimote)
 	return NULL;
 }
 
+static uint8_t status_motionplus(struct wiimote *wiimote, uint8_t lastext) {
+	unsigned char data;
+	uint8_t extval;
+
+	if (!(wiimote->flags & CWIID_FLAG_MOTIONPLUS)) return MPLUS_EXT_UNKNOWN;
+	extval = wiimote->state.ext.motionplus.extension;
+	if ( extval == lastext ) return lastext;
+	printd("mplus extval := 0x%x ?= 0x%x\n", extval, lastext);
+
+	if ( lastext != MPLUS_EXT_UNKNOWN ) {
+		data = 0x55;
+		if ( cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &data) ) {
+			cwiid_err(wiimote, "Motionplus extension initialization error");
+			return MPLUS_EXT_UNKNOWN;
+		}
+	}
+
+	switch ( extval ) {
+		case MPLUS_EXT_NONE:
+			printd("(MPLUS_EXT_NONE)\n");
+			data = 0x04;
+			break;
+		case MPLUS_EXT_NUNCHUK:
+			printd("(MPLUS_EXT_NUNCHUK)\n");
+			data = 0x05;
+			break;
+		default:
+			cwiid_err(wiimote, "Read error (motionplus extension error)");
+	}
+
+	if ( cwiid_write(wiimote, CWIID_RW_REG, 0xA600FE, 1, &data) ) {
+		cwiid_err(wiimote, "Motionplus extension initialization error");
+		return MPLUS_EXT_UNKNOWN;
+	}
+	sleep(1);  // wiimote needs a moment to initialize
+	cwiid_request_status(wiimote);
+	return extval; 
+}
+
 void *status_thread(struct wiimote *wiimote)
 {
 	struct mesg_array ma;
 	struct cwiid_status_mesg *status_mesg;
 	unsigned char buf[6];
+        unsigned char data[2];
 
 	ma.count = 1;
 	status_mesg = &ma.array[0].status_mesg;
 
+        struct pollfd pfd = { .fd = wiimote->status_pipe[0], .events = POLLIN };
+	uint8_t mplus_ext_cache = MPLUS_EXT_UNKNOWN;
+
 	while (1) {
-		if (full_read(wiimote->status_pipe[0], status_mesg,
-		              sizeof *status_mesg)) {
-			cwiid_err(wiimote, "Pipe read error (status): %s", strerror(errno));
-			/* Quit! */
-			break;
+		sleep(1);  // allow time for things to sync (also stop mutex errors on close)
+
+		// catch motionplus extension reports
+		if ( status_mesg->ext_type == CWIID_EXT_MOTIONPLUS ) {
+			mplus_ext_cache = status_motionplus(wiimote, mplus_ext_cache);
 		}
 
-		if (status_mesg->type != CWIID_MESG_STATUS) {
-			cwiid_err(wiimote, "Bad message on status pipe");
-			continue;
-		}
-
-		if (status_mesg->ext_type == CWIID_EXT_UNKNOWN) {
-			/* Read extension ID */
-			if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf)) {
-				cwiid_err(wiimote, "Read error (extension error)");
-				status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+		// original wiimote extension reports
+		else if ( poll(&pfd, 1, 0) == 1 ) {
+			printd("status update: full_read()\n");
+			if (full_read(wiimote->status_pipe[0], status_mesg, sizeof *status_mesg)) {
+				printd("status update: read failure?\n");
+				cwiid_err(wiimote, "Pipe read error (status): %s", strerror(errno));
+				/* Quit! */
+				break;
 			}
-			/* If the extension didn't change, or if the extension is a
-			 * MotionPlus, no init necessary */
-			switch ((buf[4] << 8) | buf[5]) {
-			case EXT_NONE:
-				status_mesg->ext_type = CWIID_EXT_NONE;
-				break;
-			case EXT_NUNCHUK:
-				status_mesg->ext_type = CWIID_EXT_NUNCHUK;
-				break;
-			case EXT_CLASSIC:
-				status_mesg->ext_type = CWIID_EXT_CLASSIC;
-				break;
-			case EXT_BALANCE:
-				status_mesg->ext_type = CWIID_EXT_BALANCE;
-				break;
-			case EXT_MOTIONPLUS:
-				status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
-				break;
-			case EXT_INSTRUMENT:
-				switch (buf[0]) {
-				case 0x00:
-					status_mesg->ext_type = CWIID_EXT_GUITAR;
-					break;
-				case 0x01:
-					status_mesg->ext_type = CWIID_EXT_DRUMS;
-					break;
-				case 0x03:
-					status_mesg->ext_type = CWIID_EXT_TURNTABLES;
-					break;
-				default:
-					status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-					break;
-				}
-				break;
-			case EXT_PARTIAL:
-				/* Everything (but MotionPlus) shows up as partial until initialized */
-				buf[0] = 0x55;
-				buf[1] = 0x00;
-				/* Initialize extension register space */
-				if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &buf[0])) {
-					cwiid_err(wiimote, "Extension initialization error");
-					status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-				}
-				else if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &buf[1])) {
-						cwiid_err(wiimote, "Extension initialization error");
-						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-				}
+			printd("status update: read okay!\n");
+
+			if (status_mesg->type != CWIID_MESG_STATUS) {
+				cwiid_err(wiimote, "Bad message on status pipe");
+				continue;
+			}
+
+			printd("status update: ext_type := 0x%x\n", status_mesg->ext_type);
+			if (status_mesg->ext_type == CWIID_EXT_UNKNOWN) {
 				/* Read extension ID */
-				else if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf)) {
+				if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf)) {
 					cwiid_err(wiimote, "Read error (extension error)");
 					status_mesg->ext_type = CWIID_EXT_UNKNOWN;
 				}
-				else {
-					switch ((buf[4] << 8) | buf[5]) {
-					case EXT_NONE:
-					case EXT_PARTIAL:
-						status_mesg->ext_type = CWIID_EXT_NONE;
+				/* If the extension didn't change, or if the extension is a
+				 * MotionPlus, no init necessary */
+				printd("extval := 0x%x\n", (buf[4] << 8) | buf[5]);
+				switch ((buf[4] << 8) | buf[5]) {
+				case EXT_NONE:
+					printd("(EXT_NONE)\n");
+					status_mesg->ext_type = CWIID_EXT_NONE;
+					break;
+				case EXT_NUNCHUK:
+					printd("(EXT_NUNCHUK)?\n");
+					data[0] = 0x05;
+					cwiid_write(wiimote, CWIID_RW_REG, 0xA600FE, 1, &data[0]);
+					cwiid_read(wiimote, CWIID_RW_REG, 0xA400FE, 1, &data[1]);
+					printd("d1 := 0x%x\n", data[1]);
+					if (data[1] == 0x05) {
+						printd("(EXT_MOTIONPLUS)\n");
+						status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
 						break;
-					case EXT_NUNCHUK:
-						status_mesg->ext_type = CWIID_EXT_NUNCHUK;
+					}
+					printd("(EXT_NUNCHUK)\n");
+					status_mesg->ext_type = CWIID_EXT_NUNCHUK;
+					break;
+				case EXT_CLASSIC:
+					printd("(EXT_CLASSIC)\n");
+					status_mesg->ext_type = CWIID_EXT_CLASSIC;
+					break;
+				case EXT_BALANCE:
+					status_mesg->ext_type = CWIID_EXT_BALANCE;
+					break;
+				case EXT_MOTIONPLUS:
+				case EXT_NUNCHUK_MPLUS:
+					printd("(EXT_MOTIONPLUS)\n");
+					status_mesg->ext_type = CWIID_EXT_MOTIONPLUS;
+					mplus_ext_cache = MPLUS_EXT_UNKNOWN;
+					break;
+				case EXT_INSTRUMENT:
+					switch (buf[0]) {
+					case 0x00:
+						status_mesg->ext_type = CWIID_EXT_GUITAR;
 						break;
-					case EXT_CLASSIC:
-						status_mesg->ext_type = CWIID_EXT_CLASSIC;
+					case 0x01:
+						status_mesg->ext_type = CWIID_EXT_DRUMS;
 						break;
-					case EXT_BALANCE:
-						status_mesg->ext_type = CWIID_EXT_BALANCE;
-						break;
-					case EXT_INSTRUMENT:
-						switch (buf[0]) {
-						case 0x00:
-							status_mesg->ext_type = CWIID_EXT_GUITAR;
-							break;
-						case 0x01:
-							status_mesg->ext_type = CWIID_EXT_DRUMS;
-							break;
-						case 0x03:
-							status_mesg->ext_type = CWIID_EXT_TURNTABLES;
-							break;
-						default:
-							status_mesg->ext_type = CWIID_EXT_UNKNOWN;
-							break;
-						}
+					case 0x03:
+						status_mesg->ext_type = CWIID_EXT_TURNTABLES;
 						break;
 					default:
 						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
 						break;
 					}
+					break;
+				case EXT_PARTIAL:
+					/* Everything (but MotionPlus) shows up as partial until initialized */
+					data[0] = 0x55;
+					data[1] = 0x00;
+					/* Initialize extension register space */
+					if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0])) {
+						cwiid_err(wiimote, "Extension initialization error");
+						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+					}
+					else if (cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[1])) {
+						cwiid_err(wiimote, "Extension initialization error");
+						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+					}
+					/* Read extension ID */
+					else if (cwiid_read(wiimote, CWIID_RW_REG, 0xA400FA, 6, &buf)) {
+						cwiid_err(wiimote, "Read error (extension error)");
+						status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+					}
+					else {
+						printd("partial extval := 0x%x\n", (buf[4] << 8) | buf[5]);
+						switch ((buf[4] << 8) | buf[5]) {
+						case EXT_NONE:
+						case EXT_PARTIAL:
+							printd("(EXT_NONE)\n");
+							status_mesg->ext_type = CWIID_EXT_NONE;
+							break;
+						case EXT_NUNCHUK:
+							printd("(EXT_NUNCHUK)\n");
+							status_mesg->ext_type = CWIID_EXT_NUNCHUK;
+							break;
+						case EXT_CLASSIC:
+							printd("(EXT_CLASSIC)\n");
+							status_mesg->ext_type = CWIID_EXT_CLASSIC;
+							break;
+						case EXT_BALANCE:
+							status_mesg->ext_type = CWIID_EXT_BALANCE;
+							break;
+						case EXT_INSTRUMENT:
+							switch (buf[0]) {
+							case 0x00:
+								status_mesg->ext_type = CWIID_EXT_GUITAR;
+								break;
+							case 0x01:
+								status_mesg->ext_type = CWIID_EXT_DRUMS;
+								break;
+							case 0x03:
+								status_mesg->ext_type = CWIID_EXT_TURNTABLES;
+								break;
+							default:
+								status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+								break;
+							}
+							break;
+						default:
+							status_mesg->ext_type = CWIID_EXT_UNKNOWN;
+							break;
+						}
+					}
+					break;
 				}
-				break;
 			}
 		}
+
+		else {
+			continue;
+		}
+
 
 		if (update_state(wiimote, &ma)) {
 			cwiid_err(wiimote, "State update error");

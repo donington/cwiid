@@ -62,7 +62,7 @@ int cwiid_enable(cwiid_wiimote_t *wiimote, int flags)
 
 int cwiid_disable(cwiid_wiimote_t *wiimote, int flags)
 {
-	unsigned char data;
+	unsigned char data[2];
 
 	if ((flags & CWIID_FLAG_NONBLOCK) &&
 	  (wiimote->flags & CWIID_FLAG_NONBLOCK)) {
@@ -71,13 +71,13 @@ int cwiid_disable(cwiid_wiimote_t *wiimote, int flags)
 			return -1;
 		}
 	}
-	if (flags & CWIID_FLAG_MOTIONPLUS) {
-		data = 0x55;
-		cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &data);
-		data = 0x00;
-		cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &data);
-		cwiid_request_status(wiimote);
-	}
+//	if (flags & CWIID_FLAG_MOTIONPLUS) {
+//		data[0] = 0x55;
+//		data[1] = 0x00;
+//		cwiid_write(wiimote, CWIID_RW_REG, 0xA400F0, 1, &data[0]);
+//		cwiid_write(wiimote, CWIID_RW_REG, 0xA400FB, 1, &data[1]);
+//		cwiid_request_status(wiimote);
+//	}
 	wiimote->flags &= ~flags;
 	return 0;
 }

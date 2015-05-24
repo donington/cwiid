@@ -95,9 +95,15 @@
 #define EXT_NUNCHUK		0x0000
 #define EXT_CLASSIC		0x0101
 #define EXT_BALANCE		0x0402
-#define EXT_MOTIONPLUS	0x0405
-#define EXT_INSTRUMENT	0x0103
+#define EXT_MOTIONPLUS		0x0405
+#define EXT_INSTRUMENT		0x0103
+#define EXT_NUNCHUK_MPLUS	0x0505
 
+/* Motionplus Extension Values */
+#define MPLUS_EXT_NONE		0x00
+#define MPLUS_EXT_NUNCHUK	0x01
+#define MPLUS_EXT_UNKNOWN	0xFF
+//#define MPLUS_EXT_CLASSIC
 
 /* IR Enable blocks */
 #define MARCAN_IR_BLOCK_1			"\x00\x00\x00\x00\x00\x00\x90\x00\xC0"

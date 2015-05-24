@@ -25,10 +25,10 @@
 #include <bluetooth/bluetooth.h>	/* bdaddr_t */
 
 /* Flags */
-#define CWIID_FLAG_MESG_IFC		0x01
+#define CWIID_FLAG_MESG_IFC	0x01
 #define CWIID_FLAG_CONTINUOUS	0x02
 #define CWIID_FLAG_REPEAT_BTN	0x04
-#define CWIID_FLAG_NONBLOCK		0x08
+#define CWIID_FLAG_NONBLOCK	0x08
 #define CWIID_FLAG_MOTIONPLUS	0x10
 
 /* Report Mode Flags */
@@ -325,7 +325,7 @@ struct cwiid_motionplus_mesg {
 	enum cwiid_mesg_type type;
 	uint16_t angle_rate[3];
 	uint8_t low_speed[3];
-   uint8_t extension;
+	uint8_t extension;
 };
 
 struct cwiid_guitar_mesg {
@@ -401,11 +401,7 @@ struct balance_state {
 struct motionplus_state {
 	uint16_t angle_rate[3];
 	uint8_t low_speed[3];
-   enum cwiid_ext_type ext_type; /**< It can have an extension connected. */
-   union {
-      struct nunchuk_state nunchuk;
-      struct classic_state classic;
-   } ext;
+	uint8_t extension;
 };
 struct guitar_state {
 	uint8_t stick[2];

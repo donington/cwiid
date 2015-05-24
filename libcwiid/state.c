@@ -87,6 +87,7 @@ int update_state(struct wiimote *wiimote, struct mesg_array *ma)
 			memcpy(wiimote->state.ext.motionplus.low_speed,
 			       mesg->motionplus_mesg.low_speed,
 			       sizeof wiimote->state.ext.motionplus.low_speed);
+			wiimote->state.ext.motionplus.extension = mesg->motionplus_mesg.extension;
 			break;
 		case CWIID_MESG_GUITAR:
 			memcpy(wiimote->state.ext.guitar.stick,
